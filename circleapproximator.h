@@ -8,6 +8,8 @@
 #include <stdio.h>
 #include <vector>
 #include <math.h>
+#include <QTime>
+#include <random>
 
 using std::vector;
 
@@ -30,9 +32,9 @@ private:
 	int maxRadius;
 
 	int randRange(int low,int high); // warning - is inclusive of the high number
-	double getScore(QImage firstImage, QImage secondImage, QColor color, int x,int y, int radius);
+	double getScore(QImage &firstImage, QImage &secondImage, QColor color, int x,int y, int radius);
 	int getColorDelta(QColor c1, QColor c2);
-	QImage drawCircle(QImage image,int x, int y, int radius, QColor color);
+	void drawCircle(QImage &image,int x, int y, int radius, QColor color);
 	void randomSelectCurrentCircle();
 	bool tryPermutationAndMakeNextIfBetter(int x, int y, int radius);
 public:

@@ -2,13 +2,15 @@
 
 void CircleApproximator::processImage(QImage orig,int numCircles,int minR,int maxR){
 	printf("starting circle approximation\n");
+	QTime timer;
+	timer.start();
 	origImage = orig.convertToFormat(QImage::Format_ARGB32_Premultiplied); // make sure we know the format
 	keepGoing = true;
 	minRadius = minR;
 	maxRadius = maxR;
 	precomputedDistance.clear(); // array used in the score and draw functions
-	precomputedDistance.reserve(maxRadius+1);
-	for(int z=0; z<maxRadius+1; z++) precomputedDistance.push_back(z*z);
+	precomputedDistance.reserve(maxRadius+2);
+	for(int z=0; z<maxRadius+2; z++) precomputedDistance.push_back(z*z);
 
 	if(minRadius<1) minRadius = 1;
 	if(maxRadius>origImage.width()/2) maxRadius=origImage.width()/2;
@@ -53,8 +55,8 @@ void CircleApproximator::processImage(QImage orig,int numCircles,int minR,int ma
 			//if we have already reached a local maxima
 			if(curtX == nextX && curtY == nextY && curtRadius == nextRadius){
 				//make and save the current best approximation we have - this includes the circle we just found
-				QImage tempImage = drawCircle(newImage,curtX,curtY,curtRadius,currentColor);
-				newImage = tempImage;
+				drawCircle(newImage,curtX,curtY,curtRadius,currentColor);
+				//newImage = drawCircle(newImage,curtX,curtY,curtRadius,currentColor);
 				break;
 			}else{
 				//we found a new better circle so lets move over to it and try again
@@ -69,7 +71,7 @@ void CircleApproximator::processImage(QImage orig,int numCircles,int minR,int ma
 		QCoreApplication::processEvents();
 		//printf("emited picture %d - r %5d  - pos %5d x %5d - %5d tests - delta %5.5f\n",circle,curtRadius,curtX,curtY,numTests,currentDelta);
 	}
-	printf("Done Approximating\n");
+	printf("Done Approximating after %d ms\n",timer.elapsed());
 	emit doneProcessing(newImage);
 }
 
@@ -86,7 +88,7 @@ int CircleApproximator::randRange(int low, int high){
 	return percentage*range+low;
 }
 
-double CircleApproximator::getScore(QImage wantedImage, QImage approximatedImage, QColor color, int centerX,int centerY, int radius){
+double CircleApproximator::getScore(QImage &wantedImage, QImage &approximatedImage, QColor color, int centerX,int centerY, int radius){
 	//consider distance = sqrt(x*x + y*y);
 	//if you know distance and y, solving for x terms gives
 	//d*d - y*y = x*x
@@ -123,7 +125,7 @@ double CircleApproximator::getScore(QImage wantedImage, QImage approximatedImage
 		int unSquaredHeight = precomputedDistance[abs(centerY-y)];
 		int maxXDist = unSqauredRadius - unSquaredHeight;
 		int x=1;
-		for(; precomputedDistance[x]<maxXDist;++x); // get so x is JUST outside of the circle
+		for(; precomputedDistance[x]<=maxXDist;++x); // get so x is JUST outside of the circle
 		--x; // go back inside the circle
 		int temp;
 		//right side
@@ -162,7 +164,7 @@ int CircleApproximator::getColorDelta(QColor c1, QColor c2){
 	return total;
 }
 
-QImage CircleApproximator::drawCircle(QImage image, int centerX, int centerY, int radius, QColor color){
+void CircleApproximator::drawCircle(QImage &image, int centerX, int centerY, int radius, QColor color){
 	//consider distance = sqrt(x*x + y*y);
 	//if you know distance and y, solving for x terms gives
 	//d*d - y*y = x*x
@@ -172,20 +174,20 @@ QImage CircleApproximator::drawCircle(QImage image, int centerX, int centerY, in
 	//it starts from the top of the circle and goes down
 	//for every row, it starts from the middle and moves outwards
 
-	QImage newImage = image;
-	uchar *bits = newImage.bits(); // faster to directly modify bytes - the setPixel method is slow
-	int width = newImage.width();
-	int height = newImage.height();
+	//QImage image = oldImage;
+	uchar *bits = image.bits(); // faster to directly modify bytes - the setPixel method is slow
+	int width = image.width();
+	int height = image.height();
 	int unSqrtedDistance = precomputedDistance[radius]; // the max distance from the center anything should go
 
 	int yStartingNum = centerY-radius; // start at the top of the circle
 	if(yStartingNum<0) yStartingNum=0; // dont start outside the image
 
-	for(int y=yStartingNum; y<centerY+radius && y<height; y++){
+	for(int y=yStartingNum; y<=centerY+radius && y<height; y++){
 		int lineOffset = y*width*4;
 		int unSqrtedHeight = precomputedDistance[abs(centerY-y)];
 		int maxXDist = unSqrtedDistance - unSqrtedHeight;
-		for(int x=0; precomputedDistance[x]<maxXDist; x++){
+		for(int x=0; precomputedDistance[x]<=maxXDist; x++){
 			int pixelOffset;
 			int temp;
 			//right side
@@ -208,7 +210,7 @@ QImage CircleApproximator::drawCircle(QImage image, int centerX, int centerY, in
 			}
 		}
 	}
-	return newImage;
+	//return image;
 }
 
 void CircleApproximator::randomSelectCurrentCircle(){

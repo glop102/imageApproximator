@@ -16,6 +16,7 @@
 #include <QThread>
 #include "circlesettings.h"
 #include "circleapproximator.h"
+#include "circleapproximator_deltaselector.h"
 #include "imagelabel.h"
 
 class MainWindow : public QMainWindow
@@ -43,12 +44,14 @@ private:
 
 	QTabWidget *settingsMenu;
 	CircleSettings circleSettings;
+	CircleSettings circleSettings2;
 
 	QImage displayedImage;
 
 	QThread workerThread; // runs the wanted approximator in a different thread
 	bool workerThreadBusy;
 	CircleApproximator circleApproximator;
+	CircleApproximator_DeltaSelector circleApproximator_DeltaSelector;
 };
 
 #endif // MAINWINDOW_H

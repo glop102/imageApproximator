@@ -23,7 +23,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 
 	settingsMenu = new QTabWidget();
 	mainLayout->addWidget(settingsMenu,1,0);
-	settingsMenu->addTab(&circleSettings,"Circle");
+	settingsMenu->addTab(&circleSettings,"Circle-Random");
+	settingsMenu->addTab(&circleSettings2,"Circle-Stable");
 
 	mainLayout->addWidget(imageDisplay,2,0);
 	mainLayout->addWidget(progressBar,3,0);
@@ -38,14 +39,18 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 	connect(startButton,SIGNAL(clicked(bool)),this,SLOT(toggleApproximator()) );
 	connect(&circleApproximator,SIGNAL(progressMade(QImage,double)),this,SLOT(updateProgress(QImage,double)) );
 	connect(&circleApproximator,SIGNAL(doneProcessing(QImage)),this,SLOT(finalImageApproximation(QImage)) );
+	connect(&circleApproximator_DeltaSelector,SIGNAL(progressMade(QImage,double)),this,SLOT(updateProgress(QImage,double)) );
+	connect(&circleApproximator_DeltaSelector,SIGNAL(doneProcessing(QImage)),this,SLOT(finalImageApproximation(QImage)) );
 
 	circleApproximator.moveToThread(&workerThread);
+	circleApproximator_DeltaSelector.moveToThread(&workerThread);
 	workerThread.start();
 	workerThreadBusy=false;
 }
 
 MainWindow::~MainWindow(){
 	QMetaObject::invokeMethod(&circleApproximator,"stopProcessing");
+	QMetaObject::invokeMethod(&circleApproximator_DeltaSelector,"stopProcessing");
 	workerThread.quit();
 	workerThread.wait();
 }
@@ -63,24 +68,41 @@ void MainWindow::toggleApproximator(){
 	QString loc = imageLocationLabel->text();
 	QImage temp(loc);
 	if(temp.isNull()) return; //no image to work with
+	static QWidget *currentTab;
+	bool ret; // return status
 
 	if(!workerThreadBusy){
 		workerThreadBusy = true;
 		startButton->setText("Stop");
 		imageLocationButton->setEnabled(false);
-		bool ret =
-		QMetaObject::invokeMethod(&circleApproximator,"processImage",
-								  Q_ARG(QImage,temp),
-								  Q_ARG(int,circleSettings.numCircles()),
-								  Q_ARG(int,circleSettings.minRadius()),
-								  Q_ARG(int,circleSettings.maxRadius())
-								  );
+		currentTab = settingsMenu->currentWidget();
+		if(currentTab == &circleSettings){
+			ret =
+			QMetaObject::invokeMethod(&circleApproximator,"processImage",
+									  Q_ARG(QImage,temp),
+									  Q_ARG(int,circleSettings.numCircles()),
+									  Q_ARG(int,circleSettings.minRadius()),
+									  Q_ARG(int,circleSettings.maxRadius())
+									  );
+		}else if(currentTab == &circleSettings2){
+			ret =
+			QMetaObject::invokeMethod(&circleApproximator_DeltaSelector,"processImage",
+									  Q_ARG(QImage,temp),
+									  Q_ARG(int,circleSettings2.numCircles()),
+									  Q_ARG(int,circleSettings2.minRadius()),
+									  Q_ARG(int,circleSettings2.maxRadius())
+									  );
+		}
 		if(ret == false)
 			printf("Callback Failed - starting thread");
 	}else{
 		workerThreadBusy = false;
-		bool ret =
-		QMetaObject::invokeMethod(&circleApproximator,"stopProcessing");
+		if(currentTab == &circleSettings){
+			ret =
+			QMetaObject::invokeMethod(&circleApproximator,"stopProcessing");
+		}else if(currentTab == &circleSettings2){
+			QMetaObject::invokeMethod(&circleApproximator_DeltaSelector,"stopProcessing");
+		}
 		if(ret == false)
 			printf("Callback Failed - stoping thread");
 	}
@@ -88,7 +110,8 @@ void MainWindow::toggleApproximator(){
 
 void MainWindow::updateProgress(QImage im, double percentage){
 	displayImage(im);
-	progressBar->setValue(percentage*10000);
+	int amount = percentage * progressBar->maximum() / 100;
+	progressBar->setValue(amount);
 }
 
 void MainWindow::displayImage(QImage im){
@@ -103,6 +126,7 @@ void MainWindow::finalImageApproximation(QImage image){
 	workerThreadBusy=false;
 	startButton->setText("Start");
 	imageLocationButton->setEnabled(true);
+	progressBar->setValue(progressBar->maximum());
 }
 
 void MainWindow::saveImageDialog(){

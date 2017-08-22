@@ -15,12 +15,12 @@ CircleSettings::CircleSettings(QWidget *parent) : QWidget(parent){
 	mainLayout->addWidget(maxRadiusEntry,1,2);
 
 	numCirclesEntry->setMinimum(1);
-	numCirclesEntry->setMaximum(1000000);
+	numCirclesEntry->setMaximum(1000000000);
 	numCirclesEntry->setValue(15000);
-	minRadiusEntry->setMinimum(2);
+	minRadiusEntry->setMinimum(1);
 	minRadiusEntry->setMaximum(9999);
-	minRadiusEntry->setValue(8);
-	maxRadiusEntry->setMinimum(3);
+	minRadiusEntry->setValue(5);
+	maxRadiusEntry->setMinimum(1);
 	maxRadiusEntry->setMaximum(10000);
 	maxRadiusEntry->setValue(150);
 
