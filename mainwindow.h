@@ -44,7 +44,7 @@ private:
 
 	QTabWidget *settingsMenu;
 	CircleSettings circleSettings;
-	CircleSettings circleSettings2;
+	CircleSettings_DeltaSelector circleSettings2;
 
 	QImage displayedImage;
 

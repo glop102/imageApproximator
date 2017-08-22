@@ -101,6 +101,7 @@ void MainWindow::toggleApproximator(){
 			ret =
 			QMetaObject::invokeMethod(&circleApproximator,"stopProcessing");
 		}else if(currentTab == &circleSettings2){
+			ret=
 			QMetaObject::invokeMethod(&circleApproximator_DeltaSelector,"stopProcessing");
 		}
 		if(ret == false)

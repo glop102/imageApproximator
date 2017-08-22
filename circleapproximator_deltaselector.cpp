@@ -10,7 +10,7 @@ CircleApproximator_DeltaSelector::~CircleApproximator_DeltaSelector(){
 }
 
 void CircleApproximator_DeltaSelector::processImage(QImage orig,int numCircles,int minR,int maxR){
-	printf("starting circle approximation\n");
+	printf("starting circle approximation - delta selector\n");
 	QTime timer;
 	timer.start();
 	origImage = orig.convertToFormat(QImage::Format_ARGB32_Premultiplied); // make sure we know the format
@@ -30,7 +30,7 @@ void CircleApproximator_DeltaSelector::processImage(QImage orig,int numCircles,i
 	newImage = QImage(origImage.width(),origImage.height(),QImage::Format_ARGB32_Premultiplied);
 	newImage.fill(0); // clear the image
 
-	for(int circle=0; circle<numCircles && keepGoing && map->numPoints()>0; circle++){
+	for(int circle=0; circle<numCircles && keepGoing; circle++){
 		//printf("making a circle\n");
 		//find a circle that helps make things better
 		//currentScore=-1;
@@ -81,8 +81,10 @@ void CircleApproximator_DeltaSelector::processImage(QImage orig,int numCircles,i
 			}
 		}
 
-		double percentage = (circle+1)/(double)numCircles*100;
-		emit progressMade(newImage,percentage);
+		if(currentScore>=0){
+			double percentage = (circle+1)/(double)numCircles*100;
+			emit progressMade(newImage,percentage);
+		}
 		QCoreApplication::processEvents();
 		//printf("emited picture %d - r %5d  - pos %5d x %5d - %5d tests - score %5.5f\n",circle,curtRadius,curtX,curtY,numTests,currentScore);
 	}
@@ -320,7 +322,7 @@ void DeltaMap::clear(){
 	auto itt = points.begin();
 	while(itt != points.end()){
 		linked_element *elm = itt->second;
-		removeElement(elm);
+		//removeElement(elm); // why do you need to unlink the chain if you are simply deleting the whole chain?
 		itt++;
 		delete elm;
 	}
@@ -371,12 +373,12 @@ void DeltaMap::setPointDelta(uint32_t x, uint32_t y, double delta){
 	}else{
 		elm=points[temp];
 		newElm = false;
-		deltas_counter[elm->delta]--;
+		//deltas_counter[elm->delta]--;
 	}
-	if(deltas_counter.count(delta)!=0)
-		deltas_counter[delta]++;
-	else
-		deltas_counter[delta]=1;
+	//if(deltas_counter.count(delta)!=0)
+	//	deltas_counter[delta]++;
+	//else
+	//	deltas_counter[delta]=1;
 
 	if(!newElm)
 		removeElement(elm);
@@ -430,6 +432,7 @@ void DeltaMap::removeElement(linked_element *elm){
 		deltas[elm->delta] = elm->next;
 		elm->next->prev = NULL;
 	}else{
+		//was in the middle or the end
 		elm->prev->next = elm->next;
 		if(elm->next!=NULL)
 			elm->next->prev = elm->prev;

@@ -1,7 +1,7 @@
 #include "circleapproximator.h"
 
 void CircleApproximator::processImage(QImage orig,int numCircles,int minR,int maxR){
-	printf("starting circle approximation\n");
+	printf("starting circle approximation - random selector\n");
 	QTime timer;
 	timer.start();
 	origImage = orig.convertToFormat(QImage::Format_ARGB32_Premultiplied); // make sure we know the format

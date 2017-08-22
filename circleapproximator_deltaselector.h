@@ -38,7 +38,7 @@ private:
 		double delta;
 	};
 	map<double,linked_element*> deltas;
-	map<double,long long> deltas_counter; // numer of pixels with that delta
+	//map<double,long long> deltas_counter; // numer of pixels with that delta
 	unordered_map<uint64_t,linked_element*> points;
 
 	//std::default_random_engine generator;
