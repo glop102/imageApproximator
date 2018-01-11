@@ -18,6 +18,8 @@
 #include "circleapproximator.h"
 #include "circleapproximator_deltaselector.h"
 #include "imagelabel.h"
+#include "edgesettings.h"
+#include "kernelapproximator.h"
 
 class MainWindow : public QMainWindow
 {
@@ -45,6 +47,7 @@ private:
 	QTabWidget *settingsMenu;
 	CircleSettings circleSettings;
 	CircleSettings_DeltaSelector circleSettings2;
+	EdgeSettings edgeSettings;
 
 	QImage displayedImage;
 
@@ -52,6 +55,7 @@ private:
 	bool workerThreadBusy;
 	CircleApproximator circleApproximator;
 	CircleApproximator_DeltaSelector circleApproximator_DeltaSelector;
+	KernelApproximator kernelApproximator;
 };
 
 #endif // MAINWINDOW_H

@@ -1,5 +1,29 @@
 #include "mainwindow.h"
 
+/*
+ * ADDING A NEW APPROXIMATOR
+ *
+ * you need two objects
+ * - settings for the approximator
+ * - the approximator itself
+ *
+ * settings - inherits from QWidget
+ * - add to the settingsMenu widget
+ *
+ * approximator - inherits from QObject
+ * - move instance to worker thread
+ * - have a slot processImage(QImage) that takes an image
+ * - have a slot stopProcessing() to stop early
+ * - have a signal progressMade(QImage,double) method to give a progress of a percentage
+ *   - connect to updateProgress(QImage,double)
+ * - have a signal doneProcessing(QImage) returning the final image
+ *   - connect to finalImageApproximation(QImage)
+ *
+ * in toggleApproximator()
+ * - add if branch for starting approximator
+ * - add if branch for stopping approximator
+ */
+
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 	mainLayout = new QGridLayout();
 	setCentralWidget( new QWidget() );
@@ -25,6 +49,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 	mainLayout->addWidget(settingsMenu,1,0);
 	settingsMenu->addTab(&circleSettings,"Circle-Random");
 	settingsMenu->addTab(&circleSettings2,"Circle-Stable");
+	settingsMenu->addTab(&edgeSettings,"Edge Detector");
 
 	mainLayout->addWidget(imageDisplay,2,0);
 	mainLayout->addWidget(progressBar,3,0);
@@ -41,9 +66,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 	connect(&circleApproximator,SIGNAL(doneProcessing(QImage)),this,SLOT(finalImageApproximation(QImage)) );
 	connect(&circleApproximator_DeltaSelector,SIGNAL(progressMade(QImage,double)),this,SLOT(updateProgress(QImage,double)) );
 	connect(&circleApproximator_DeltaSelector,SIGNAL(doneProcessing(QImage)),this,SLOT(finalImageApproximation(QImage)) );
+	connect(&kernelApproximator,SIGNAL(progressMade(QImage,double)),this,SLOT(updateProgress(QImage,double)) );
+	connect(&kernelApproximator,SIGNAL(doneProcessing(QImage)),this,SLOT(finalImageApproximation(QImage)) );
 
 	circleApproximator.moveToThread(&workerThread);
 	circleApproximator_DeltaSelector.moveToThread(&workerThread);
+	kernelApproximator.moveToThread(&workerThread);
 	workerThread.start();
 	workerThreadBusy=false;
 }
@@ -51,6 +79,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 MainWindow::~MainWindow(){
 	QMetaObject::invokeMethod(&circleApproximator,"stopProcessing");
 	QMetaObject::invokeMethod(&circleApproximator_DeltaSelector,"stopProcessing");
+	QMetaObject::invokeMethod(&kernelApproximator,"stopProcessing");
 	workerThread.quit();
 	workerThread.wait();
 }
@@ -92,9 +121,19 @@ void MainWindow::toggleApproximator(){
 									  Q_ARG(int,circleSettings2.minRadius()),
 									  Q_ARG(int,circleSettings2.maxRadius())
 									  );
+		}else if(currentTab == &edgeSettings){
+			qRegisterMetaType<QList<QList<double> > >("QList<QList<double> >");
+			qRegisterMetaType<KernelApproximator::combinationTypes>("KernelApproximator::combinationTypes");
+			QList<QList<double> > kernels = edgeSettings.getKernels();
+			ret =
+			QMetaObject::invokeMethod(&kernelApproximator,"processImage",
+									  Q_ARG(QImage,temp),
+									  Q_ARG(QList<QList<double> >, kernels),
+									  Q_ARG(KernelApproximator::combinationTypes,edgeSettings.getCombinationType())
+									  );
 		}
 		if(ret == false)
-			printf("Callback Failed - starting thread");
+			printf("Callback Failed - starting thread\n");
 	}else{
 		workerThreadBusy = false;
 		if(currentTab == &circleSettings){
@@ -103,9 +142,12 @@ void MainWindow::toggleApproximator(){
 		}else if(currentTab == &circleSettings2){
 			ret=
 			QMetaObject::invokeMethod(&circleApproximator_DeltaSelector,"stopProcessing");
+		}else if(currentTab == &edgeSettings){
+			ret=
+			QMetaObject::invokeMethod(&kernelApproximator,"stopProcessing");
 		}
 		if(ret == false)
-			printf("Callback Failed - stoping thread");
+			printf("Callback Failed - stoping thread\n");
 	}
 }
 
