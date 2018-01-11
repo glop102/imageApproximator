@@ -14,7 +14,7 @@ EdgeSettings::EdgeSettings(QWidget *parent) : QWidget(parent){
 
 	// === Second Group - Number of kernels to apply
 	kernelNumberSelection = new QGroupBox("Number of Kernels");
-	numberKernelsLabel = new QLabel("2");
+	numberKernelsLabel = new QLabel("4");
 	fewerKernels = new QPushButton("-");
 	moreKernels = new QPushButton("+");
 	kernelNumberLayout = new QGridLayout;
