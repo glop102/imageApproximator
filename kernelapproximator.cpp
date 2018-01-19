@@ -1,7 +1,7 @@
 #include "kernelapproximator.h"
 namespace Kernel{
 
-QImage Approximator::applyKernel(QImage orig, QList<double> kernel){
+QImage Approximator::applyKernel(QImage orig, QList<double> kernel, bool absolute){
 	QImage dest(orig.width(),orig.height(),orig.format());
 	dest.fill(Qt::black);
 	double divisor = calculateKernelDivisor(kernel);
@@ -31,23 +31,22 @@ QImage Approximator::applyKernel(QImage orig, QList<double> kernel){
 			temp = orig.pixelColor(x+1,y+1);
 			r+=temp.red()*kernel[8];g+=temp.green()*kernel[8];b+=temp.blue()*kernel[8];
 
-			temp.setRed(abs(r)/divisor);
-			temp.setGreen(abs(g)/divisor);
-			temp.setBlue(abs(b)/divisor);
+			if(absolute){
+				temp.setRed(abs(r)/divisor);
+				temp.setGreen(abs(g)/divisor);
+				temp.setBlue(abs(b)/divisor);
+			}else{
+				temp.setRed(r/divisor/2 + 128);
+				temp.setGreen(g/divisor/2 + 128);
+				temp.setBlue(b/divisor/2 + 128);
+			}
 			dest.setPixel(x,y,temp.rgb());
 		}
 	}
 	return dest;
 }
 
-//void Approximator::processImage(QImage orig, Settings settingsHolder){
-//	processImage(
-//				orig,
-//				settingsHolder.getKernels(),
-//				settingsHolder.getNumberPasses()
-//			);
-//}
-void Approximator::processImage(QImage orig, QList<QList<double> > kernels, int numPasses){
+void Approximator::processImage(QImage orig, QList<QList<double> > kernels, int numPasses, bool absolute){
 	orig = orig.convertToFormat(QImage::Format_ARGB32_Premultiplied); // make sure we know the format
 	stopSignalRecieved = false;
 	double progress_step =  // how much each step is worth percentage wise
@@ -59,7 +58,7 @@ void Approximator::processImage(QImage orig, QList<QList<double> > kernels, int 
 	while(numPasses){
 		QList<QImage> images;
 		for(auto kernel : kernels){
-			QImage temp = applyKernel(orig,kernel);
+			QImage temp = applyKernel(orig,kernel,absolute);
 			steps_taken++;
 			emit progressMade(temp, steps_taken*progress_step );
 			images.append(temp);
@@ -71,7 +70,11 @@ void Approximator::processImage(QImage orig, QList<QList<double> > kernels, int 
 			}
 		}
 
-		QImage temp = combine_maximum(images);
+		QImage temp;
+		if(absolute)
+			temp = combine_maximum(images);
+		else
+			temp = combine_extreme(images);
 		steps_taken++;
 		emit(progressMade(temp,steps_taken*progress_step));
 		numPasses--;
@@ -130,25 +133,23 @@ QImage Approximator::combine_maximum(QList<QImage> images){
 	}
 	return combined;
 }
-
-QImage Approximator::combine_average(QList<QImage> images){
+QImage Approximator::combine_extreme(QList<QImage> images){
+	//gets the value closest to 0 or 256 per channel per pixel
+	//output is the max values encountered
 	QImage combined(images[0].width(),images[0].height(),images[0].format());
 	for(int y=0; y<combined.height(); y++){
 		for(int x=0; x<combined.width(); x++){
 			int r=0,g=0,b=0;
 			for(int i=0; i<images.length(); i++){
 				QColor color = images[i].pixelColor(x,y);
-				if(color.red()>r)
-					r=color.red();
-				if(color.green()>g)
-					g=color.green();
-				if(color.blue()>b)
-					b=color.blue();
+				if(abs(color.red()-128)>abs(r))
+					r=color.red()-128;
+				if(abs(color.green()-128)>abs(g))
+					g=color.green()-128;
+				if(abs(color.blue()-128)>abs(b))
+					b=color.blue()-128;
 			}
-			r/=images.length();
-			g/=images.length();
-			b/=images.length();
-			combined.setPixelColor(x,y,QColor(r,g,b));
+			combined.setPixelColor(x,y,QColor(r+128,g+128,b+128));
 		}
 	}
 	return combined;
@@ -163,7 +164,7 @@ QImage Approximator::combine_average(QList<QImage> images){
 Settings::Settings(){
 	localApproximator = new Approximator;
 
-	// === Left Group - How the different images are combined after getting the kernel applied to it
+	// === Left Group - Various numerical options
 	quantitySelection = new QGroupBox;
 	quantityLayout = new QVBoxLayout;
 	numberPasses = new QSpinBox;
@@ -174,12 +175,6 @@ Settings::Settings(){
 	quantityLayout->addWidget(new QLabel("Number Of Kernels"));
 	quantityLayout->addWidget(numberKernels);
 
-	globalLayout = new QHBoxLayout;
-	this->setLayout(globalLayout);
-	globalLayout->addWidget(quantitySelection);
-	globalLayout->addStretch(1);
-	//kernels go after the stretch
-
 	numberPasses->setMaximum(10);
 	numberPasses->setMinimum(1);
 	numberPasses->setValue(2);
@@ -187,6 +182,24 @@ Settings::Settings(){
 	numberKernels->setMinimum(1);
 	numberKernels->setValue(4);
 	connect( numberKernels,SIGNAL(valueChanged(int)),this,SLOT(numberKernelsChange()) );
+
+	// === Middle Group - Various binary options
+	toggleSelection = new QGroupBox;
+	toggleLayout = new QVBoxLayout;
+	signedUnsignedToggle = new QPushButton("Absolute");
+	toggleSelection->setLayout(toggleLayout);
+	toggleLayout->addWidget(signedUnsignedToggle);
+
+	signedUnsignedToggle->setCheckable(true);
+	connect( signedUnsignedToggle,SIGNAL(toggled(bool)),this,SLOT(signedUnsignedToggled()) );
+
+	// == Finish out the layouts
+	globalLayout = new QHBoxLayout;
+	this->setLayout(globalLayout);
+	globalLayout->addWidget(quantitySelection);
+	globalLayout->addWidget(toggleSelection);
+	globalLayout->addStretch(1);
+	//kernels go after the stretch
 
 	addNewKernel({-1,0,1,-2,0,2,-1,0,1}); // horizontal
 	addNewKernel({-1,-2,-1,0,0,0,1,2,1}); // vertical
@@ -284,11 +297,19 @@ int Settings::startApproximator(QImage orig){
 	QMetaObject::invokeMethod(localApproximator,"processImage",
 							  Q_ARG(QImage,orig),
 							  Q_ARG(QList<QList<double> >, getKernels()),
-							  Q_ARG(int,getNumberPasses())
+							  Q_ARG(int,getNumberPasses()),
+							  Q_ARG(bool,! signedUnsignedToggle->isChecked())
 							  );
 }
 int Settings::stopApproximator(){
 	return QMetaObject::invokeMethod(localApproximator,"stopProcessing");
+}
+void Settings::signedUnsignedToggled(){
+	if(signedUnsignedToggle->isChecked()){
+		signedUnsignedToggle->setText("Signed");
+	}else{
+		signedUnsignedToggle->setText("Absolute");
+	}
 }
 
 }//namespace

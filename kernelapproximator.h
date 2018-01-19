@@ -28,14 +28,14 @@ protected:
 	bool stopSignalRecieved;
 	double calculateKernelDivisor(QList<double> kernel);
 public:
-	QImage applyKernel(QImage orig, QList<double> kernel);
+	QImage applyKernel(QImage orig, QList<double> kernel, bool absolute);
 
-	QImage combine_average(QList<QImage> images);
 	QImage combine_maximum(QList<QImage> images);
+	QImage combine_extreme(QList<QImage> images);
 
 public slots:
 	//void processImage(QImage orig, Settings settingsHolder);
-	void processImage(QImage orig, QList<QList<double> > kernels, int numberPasses);
+	void processImage(QImage orig, QList<QList<double> > kernels, int numberPasses, bool absolute);
 	void stopProcessing(); // cancels the operation
 signals:
 	void progressMade(QImage,double percentage);
@@ -52,6 +52,7 @@ public:
 	int getNumberPasses();
 public slots:
 	void numberKernelsChange();
+	void signedUnsignedToggled();
 
 	BaseApproximator* getApproximator(); //returns a valid instance
 	int startApproximator(QImage orig);
@@ -63,6 +64,10 @@ protected:
 	QGroupBox *quantitySelection;
 	QVBoxLayout *quantityLayout;
 	QSpinBox *numberPasses,*numberKernels;
+
+	QGroupBox *toggleSelection;
+	QVBoxLayout *toggleLayout;
+	QPushButton *signedUnsignedToggle;
 
 	QList<QGroupBox*> kernelGroups;
 
