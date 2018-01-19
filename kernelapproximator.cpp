@@ -164,38 +164,29 @@ Settings::Settings(){
 	localApproximator = new Approximator;
 
 	// === Left Group - How the different images are combined after getting the kernel applied to it
-	numberPassesSelection = new QGroupBox("Number of Passes");
-	numberPassesLabel = new QLabel("2");
-	fewerPasses = new QPushButton("-");
-	morePasses = new QPushButton("+");
-	numberPassesLayout = new QGridLayout;
-	numberPassesLayout->addWidget(numberPassesLabel,0,0,1,0);
-	numberPassesLayout->addWidget(fewerPasses,1,0);
-	numberPassesLayout->addWidget(morePasses,1,1);
-	numberPassesLayout->setRowStretch(2,1);
-	numberPassesSelection->setLayout(numberPassesLayout);
-	connect(fewerPasses,SIGNAL(clicked(bool)),this,SLOT(numberPassesChanged()) );
-	connect(morePasses,SIGNAL(clicked(bool)),this,SLOT(numberPassesChanged()) );
-
-	// === Second Group - Number of kernels to apply
-	kernelNumberSelection = new QGroupBox("Number of Kernels");
-	numberKernelsLabel = new QLabel("4");
-	fewerKernels = new QPushButton("-");
-	moreKernels = new QPushButton("+");
-	kernelNumberLayout = new QGridLayout;
-	kernelNumberLayout->addWidget(numberKernelsLabel,0,0,1,0);
-	kernelNumberLayout->addWidget(fewerKernels,1,0);
-	kernelNumberLayout->addWidget(moreKernels,1,1);
-	kernelNumberLayout->setRowStretch(2,1);
-	kernelNumberSelection->setLayout(kernelNumberLayout);
-	connect(fewerKernels,SIGNAL(clicked(bool)),this,SLOT(numberKernelsChange()) );
-	connect(moreKernels,SIGNAL(clicked(bool)),this,SLOT(numberKernelsChange()) );
+	quantitySelection = new QGroupBox;
+	quantityLayout = new QVBoxLayout;
+	numberPasses = new QSpinBox;
+	numberKernels = new QSpinBox;
+	quantitySelection->setLayout(quantityLayout);
+	quantityLayout->addWidget(new QLabel("Number Of Passes"));
+	quantityLayout->addWidget(numberPasses);
+	quantityLayout->addWidget(new QLabel("Number Of Kernels"));
+	quantityLayout->addWidget(numberKernels);
 
 	globalLayout = new QHBoxLayout;
 	this->setLayout(globalLayout);
-	globalLayout->addWidget(numberPassesSelection);
-	globalLayout->addWidget(kernelNumberSelection);
+	globalLayout->addWidget(quantitySelection);
 	globalLayout->addStretch(1);
+	//kernels go after the stretch
+
+	numberPasses->setMaximum(10);
+	numberPasses->setMinimum(1);
+	numberPasses->setValue(2);
+	numberKernels->setMaximum(10);
+	numberKernels->setMinimum(1);
+	numberKernels->setValue(4);
+	connect( numberKernels,SIGNAL(valueChanged(int)),this,SLOT(numberKernelsChange()) );
 
 	addNewKernel({-1,0,1,-2,0,2,-1,0,1}); // horizontal
 	addNewKernel({-1,-2,-1,0,0,0,1,2,1}); // vertical
@@ -204,37 +195,16 @@ Settings::Settings(){
 }
 
 void Settings::numberKernelsChange(){
-	int current_number = numberKernelsLabel->text().toInt();
-	if(QObject::sender() == fewerKernels){
-		if(current_number<=1) return;
-		current_number-=1;
-		while(kernelGroups.length()>current_number){
-			auto temp = kernelGroups[kernelGroups.length()-1];
-			globalLayout->removeWidget(temp);
-			delete temp;
-			kernelGroups.pop_back();
-		}
-	}else{
-		if(current_number>=10) return;
-		current_number+=1;
-		while(kernelGroups.length()<current_number){
-			addNewKernel();
-		}
+	int current_number = numberKernels->value();
+	while(kernelGroups.length()>current_number){ // shrink if number went down
+		auto temp = kernelGroups[kernelGroups.length()-1];
+		globalLayout->removeWidget(temp);
+		delete temp;
+		kernelGroups.pop_back();
 	}
-
-	numberKernelsLabel->setText(QString::number(current_number));
-}
-void Settings::numberPassesChanged(){
-	int current_number = numberPassesLabel->text().toInt();
-	if(QObject::sender() == fewerPasses){
-		if(current_number<=1) return;
-		current_number-=1;
-	}else{
-		if(current_number>=10) return;
-		current_number+=1;
+	while(kernelGroups.length()<current_number){ // grow if number went up
+		addNewKernel();
 	}
-
-	numberPassesLabel->setText(QString::number(current_number));
 }
 
 void Settings::addNewKernel(QList<double> kernel){
@@ -302,7 +272,7 @@ QList<QList<double> > Settings::getKernels(){
 }
 
 int Settings::getNumberPasses(){
-	return numberPassesLabel->text().toInt();
+	return numberPasses->value();
 }
 
 BaseApproximator* Settings::getApproximator(){

@@ -16,6 +16,7 @@
 #include <QString>
 #include <QLineEdit>
 #include <QDoubleValidator>
+#include <QSpinBox>
 #include "base.h"
 
 namespace Kernel {
@@ -47,15 +48,9 @@ class Settings : public BaseSettings{
 protected:
 	QHBoxLayout *globalLayout;
 
-	QGroupBox *numberPassesSelection;
-	QGridLayout *numberPassesLayout;
-	QLabel *numberPassesLabel;
-	QPushButton *fewerPasses,*morePasses;
-
-	QGroupBox *kernelNumberSelection;
-	QGridLayout *kernelNumberLayout;
-	QLabel *numberKernelsLabel;
-	QPushButton *fewerKernels,*moreKernels;
+	QGroupBox *quantitySelection;
+	QVBoxLayout *quantityLayout;
+	QSpinBox *numberPasses,*numberKernels;
 
 	QList<QGroupBox*> kernelGroups;
 
@@ -68,7 +63,6 @@ public:
 	int getNumberPasses();
 public slots:
 	void numberKernelsChange();
-	void numberPassesChanged();
 
 	BaseApproximator* getApproximator(); //returns a valid instance
 	int startApproximator(QImage orig);
