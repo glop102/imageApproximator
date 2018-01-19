@@ -44,17 +44,6 @@ signals:
 
 class Settings : public BaseSettings{
 	Q_OBJECT
-	Approximator* localApproximator;
-protected:
-	QHBoxLayout *globalLayout;
-
-	QGroupBox *quantitySelection;
-	QVBoxLayout *quantityLayout;
-	QSpinBox *numberPasses,*numberKernels;
-
-	QList<QGroupBox*> kernelGroups;
-
-	QDoubleValidator doubleValidator;
 public:
 	explicit Settings();
 
@@ -67,6 +56,17 @@ public slots:
 	BaseApproximator* getApproximator(); //returns a valid instance
 	int startApproximator(QImage orig);
 	int stopApproximator();
+protected:
+	Approximator* localApproximator;
+	QHBoxLayout *globalLayout;
+
+	QGroupBox *quantitySelection;
+	QVBoxLayout *quantityLayout;
+	QSpinBox *numberPasses,*numberKernels;
+
+	QList<QGroupBox*> kernelGroups;
+
+	QDoubleValidator doubleValidator;
 };
 
 }//namespace

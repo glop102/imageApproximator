@@ -119,7 +119,6 @@ signals:
 
 class Settings : public BaseSettings{
 	Q_OBJECT
-	Approximator* localApproximator;
 public:
 	explicit Settings();
 	int numCircles();
@@ -131,6 +130,7 @@ public slots:
 	int startApproximator(QImage orig);
 	int stopApproximator();
 protected:
+	Approximator* localApproximator;
 	QGridLayout *mainLayout;
 	QLabel *description;
 	QSpinBox *numCirclesEntry,*minRadiusEntry,*maxRadiusEntry;
