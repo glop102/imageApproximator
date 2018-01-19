@@ -19,8 +19,7 @@
 #include "imagelabel.h"
 #include "kernelapproximator.h"
 
-class MainWindow : public QMainWindow
-{
+class MainWindow : public QMainWindow{
 	Q_OBJECT
 
 public:
@@ -36,6 +35,12 @@ public slots:
 	void saveImageDialog();
 
 private:
+	enum STATE{IDLE,APPROXIMATING};
+	STATE currentState;
+	void setState(STATE);
+	void constructGUI();
+	void addApproximators();
+
 	QGridLayout *mainLayout;
 	QLabel *imageLocationLabel;
 	QPushButton *imageLocationButton,*saveButton,*startButton;
@@ -50,10 +55,6 @@ private:
 	QImage displayedImage;
 
 	QThread workerThread; // runs the wanted approximator in a different thread
-	bool workerThreadBusy;
-	Circle::Approximator circleApproximator;
-	Circle_DeltaSelector::Approximator circleApproximator_DeltaSelector;
-	Kernel::Approximator kernelApproximator;
 };
 
 #endif // MAINWINDOW_H

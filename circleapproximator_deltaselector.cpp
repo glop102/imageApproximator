@@ -455,10 +455,11 @@ long long DeltaMap::numPoints(){
 //=====================================================================================================================================================
 //=====================================================================================================================================================
 
-Settings::Settings(QWidget *parent) : QWidget(parent){
+Settings::Settings(){
 	makeWidgets();
 	layoutWidgets();
 	makeConnections();
+	localApproximator = new Approximator;
 }
 void Settings::keepRadiusEntriesInSync(){
 	QObject *sender = QObject::sender();
@@ -483,6 +484,22 @@ int Settings::minRadius(){
 int Settings::maxRadius(){
 	return maxRadiusEntry->value();
 }
+BaseApproximator* Settings::getApproximator(){
+	return localApproximator;
+}
+int Settings::startApproximator(QImage orig){
+	return
+	QMetaObject::invokeMethod(localApproximator,"processImage",
+							  Q_ARG(QImage,orig),
+							  Q_ARG(int,numCircles()),
+							  Q_ARG(int,minRadius()),
+							  Q_ARG(int,maxRadius())
+							  );
+}
+int Settings::stopApproximator(){
+	return QMetaObject::invokeMethod(localApproximator,"stopProcessing");
+}
+
 void Settings::makeWidgets(){
 	description = new QLabel("This chooses the pixels that are the most wrong to try to put a circle at");
 	numCirclesEntry = new QSpinBox();

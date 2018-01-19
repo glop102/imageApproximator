@@ -14,12 +14,14 @@
 #include <QGridLayout>
 #include <QSpinBox>
 #include <QLabel>
+#include "base.h"
 
 namespace Circle{
 
 using std::vector;
+class Settings;
 
-class Approximator : public QObject{
+class Approximator : public BaseApproximator{
 	Q_OBJECT
 private:
 	// temp vars for use in the processImage method - we save them externally so that i can call a method to do some work and not copy/paste the same thing 6 times
@@ -45,7 +47,6 @@ private:
 	bool tryPermutationAndMakeNextIfBetter(int x, int y, int radius);
 
 public slots:
-	//void processImage(QImage orig, Settings settings);
 	void processImage(QImage orig, int numCircles, int minRadius, int maxRadius);
 	void stopProcessing(); // cancels the operation
 signals:
@@ -53,15 +54,19 @@ signals:
 	void doneProcessing(QImage);
 };
 
-class Settings : public QWidget{
+class Settings : public BaseSettings{
 	Q_OBJECT
+	Approximator* localApproximator;
 public:
-	explicit Settings(QWidget *parent = 0);
+	explicit Settings();
 	int numCircles();
 	int minRadius();
 	int maxRadius();
 public slots:
 	void keepRadiusEntriesInSync();
+	BaseApproximator* getApproximator(); //returns a valid instance
+	int startApproximator(QImage orig);
+	int stopApproximator();
 protected:
 	QGridLayout *mainLayout;
 	QLabel *description;

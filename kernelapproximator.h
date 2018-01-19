@@ -13,44 +13,44 @@
 #include <QPushButton>
 #include <QGroupBox>
 #include <QRadioButton>
-#include <QList>
 #include <QString>
 #include <QLineEdit>
 #include <QDoubleValidator>
+#include "base.h"
 
 namespace Kernel {
+class Settings;
 
-class Approximator : public QObject
-{
+class Approximator : public BaseApproximator{
 	Q_OBJECT
 protected:
 	bool stopSignalRecieved;
 	double calculateKernelDivisor(QList<double> kernel);
 public:
-	enum combinationTypes{AVERAGE,MAXIMUM};
-	explicit Approximator(QObject *parent = nullptr);
 	QImage applyKernel(QImage orig, QList<double> kernel);
 
 	QImage combine_average(QList<QImage> images);
 	QImage combine_maximum(QList<QImage> images);
 
 public slots:
-	void processImage(QImage orig, QList<QList<double> > kernels, Kernel::Approximator::combinationTypes combType);
+	//void processImage(QImage orig, Settings settingsHolder);
+	void processImage(QImage orig, QList<QList<double> > kernels, int numberPasses);
 	void stopProcessing(); // cancels the operation
 signals:
 	void progressMade(QImage,double percentage);
 	void doneProcessing(QImage);
 };
 
-class Settings : public QWidget
-{
+class Settings : public BaseSettings{
 	Q_OBJECT
+	Approximator* localApproximator;
 protected:
 	QHBoxLayout *globalLayout;
 
-	QGroupBox *combinationOptions;
-	QVBoxLayout *combinationLayout;
-	QRadioButton *averageButton,*maxButton;
+	QGroupBox *numberPassesSelection;
+	QGridLayout *numberPassesLayout;
+	QLabel *numberPassesLabel;
+	QPushButton *fewerPasses,*morePasses;
 
 	QGroupBox *kernelNumberSelection;
 	QGridLayout *kernelNumberLayout;
@@ -61,13 +61,18 @@ protected:
 
 	QDoubleValidator doubleValidator;
 public:
-	explicit Settings(QWidget *parent = nullptr);
+	explicit Settings();
 
 	void addNewKernel(QList<double> kernel = {0,0,0,0,0,0,0,0,0}); // adds to the list a new kernel
 	QList<QList<double> > getKernels();
-	Approximator::combinationTypes getCombinationType();
+	int getNumberPasses();
 public slots:
 	void numberKernelsChange();
+	void numberPassesChanged();
+
+	BaseApproximator* getApproximator(); //returns a valid instance
+	int startApproximator(QImage orig);
+	int stopApproximator();
 };
 
 }//namespace

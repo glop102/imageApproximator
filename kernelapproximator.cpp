@@ -1,10 +1,6 @@
 #include "kernelapproximator.h"
 namespace Kernel{
 
-Approximator::Approximator(QObject *parent) : QObject(parent){
-
-}
-
 QImage Approximator::applyKernel(QImage orig, QList<double> kernel){
 	QImage dest(orig.width(),orig.height(),orig.format());
 	dest.fill(Qt::black);
@@ -44,29 +40,43 @@ QImage Approximator::applyKernel(QImage orig, QList<double> kernel){
 	return dest;
 }
 
-void Approximator::processImage(QImage orig, QList<QList<double> > kernels, combinationTypes combType){
-	QList<QImage> images;
+//void Approximator::processImage(QImage orig, Settings settingsHolder){
+//	processImage(
+//				orig,
+//				settingsHolder.getKernels(),
+//				settingsHolder.getNumberPasses()
+//			);
+//}
+void Approximator::processImage(QImage orig, QList<QList<double> > kernels, int numPasses){
+	orig = orig.convertToFormat(QImage::Format_ARGB32_Premultiplied); // make sure we know the format
 	stopSignalRecieved = false;
-	for(auto kernel : kernels){
-		QImage temp = applyKernel(orig,kernel);
-		emit progressMade(temp,   100 * ((images.length()+1)/((double)kernels.length()+1))   );
-		images.append(temp);
+	double progress_step =  // how much each step is worth percentage wise
+			100.0 / ( //100% divided by number of steps
+			(kernels.length()+1) // steps per loop (kernels + combine)
+			* numPasses); // number of loops
+	int steps_taken = 0;
 
-		QCoreApplication::processEvents();
-		if(stopSignalRecieved){
-			emit doneProcessing(orig);
-			return;
+	while(numPasses){
+		QList<QImage> images;
+		for(auto kernel : kernels){
+			QImage temp = applyKernel(orig,kernel);
+			steps_taken++;
+			emit progressMade(temp, steps_taken*progress_step );
+			images.append(temp);
+
+			QCoreApplication::processEvents();
+			if(stopSignalRecieved){
+				emit doneProcessing(orig);
+				return;
+			}
 		}
-	}
 
-	if(combType == AVERAGE){
-		QImage temp = combine_average(images);
-		emit(doneProcessing(temp));
-		return;
-	}else if(combType == MAXIMUM){
 		QImage temp = combine_maximum(images);
-		emit(doneProcessing(temp));
-		return;
+		steps_taken++;
+		emit(progressMade(temp,steps_taken*progress_step));
+		numPasses--;
+
+		orig = temp; // time for another pass
 	}
 
 	emit doneProcessing(orig);
@@ -74,8 +84,10 @@ void Approximator::processImage(QImage orig, QList<QList<double> > kernels, comb
 }
 
 void Approximator::stopProcessing(){
-	stopSignalRecieved = true;
-	printf("Stopping Kernel Approximator\n");
+	if(stopSignalRecieved==false){
+		stopSignalRecieved = true;
+		printf("Stopping Kernel Approximator\n");
+	}
 }
 
 double Approximator::calculateKernelDivisor(QList<double> kernel){
@@ -98,6 +110,8 @@ double Approximator::calculateKernelDivisor(QList<double> kernel){
 }
 
 QImage Approximator::combine_maximum(QList<QImage> images){
+	//gets the largest value per channel per pixel from all the canidate input images
+	//output is the max values encountered
 	QImage combined(images[0].width(),images[0].height(),images[0].format());
 	for(int y=0; y<combined.height(); y++){
 		for(int x=0; x<combined.width(); x++){
@@ -146,17 +160,22 @@ QImage Approximator::combine_average(QList<QImage> images){
 //=====================================================================================================================================================
 //=====================================================================================================================================================
 
-Settings::Settings(QWidget *parent) : QWidget(parent){
+Settings::Settings(){
+	localApproximator = new Approximator;
+
 	// === Left Group - How the different images are combined after getting the kernel applied to it
-	combinationOptions = new QGroupBox("Combination Options");
-	averageButton = new QRadioButton("Average");
-	maxButton = new QRadioButton("Max Value");
-	maxButton->setChecked(true);
-	combinationLayout = new QVBoxLayout;
-	combinationLayout->addWidget(averageButton);
-	combinationLayout->addWidget(maxButton);
-	combinationLayout->addStretch(1);
-	combinationOptions->setLayout(combinationLayout);
+	numberPassesSelection = new QGroupBox("Number of Passes");
+	numberPassesLabel = new QLabel("2");
+	fewerPasses = new QPushButton("-");
+	morePasses = new QPushButton("+");
+	numberPassesLayout = new QGridLayout;
+	numberPassesLayout->addWidget(numberPassesLabel,0,0,1,0);
+	numberPassesLayout->addWidget(fewerPasses,1,0);
+	numberPassesLayout->addWidget(morePasses,1,1);
+	numberPassesLayout->setRowStretch(2,1);
+	numberPassesSelection->setLayout(numberPassesLayout);
+	connect(fewerPasses,SIGNAL(clicked(bool)),this,SLOT(numberPassesChanged()) );
+	connect(morePasses,SIGNAL(clicked(bool)),this,SLOT(numberPassesChanged()) );
 
 	// === Second Group - Number of kernels to apply
 	kernelNumberSelection = new QGroupBox("Number of Kernels");
@@ -174,7 +193,7 @@ Settings::Settings(QWidget *parent) : QWidget(parent){
 
 	globalLayout = new QHBoxLayout;
 	this->setLayout(globalLayout);
-	globalLayout->addWidget(combinationOptions);
+	globalLayout->addWidget(numberPassesSelection);
 	globalLayout->addWidget(kernelNumberSelection);
 	globalLayout->addStretch(1);
 
@@ -204,6 +223,18 @@ void Settings::numberKernelsChange(){
 	}
 
 	numberKernelsLabel->setText(QString::number(current_number));
+}
+void Settings::numberPassesChanged(){
+	int current_number = numberPassesLabel->text().toInt();
+	if(QObject::sender() == fewerPasses){
+		if(current_number<=1) return;
+		current_number-=1;
+	}else{
+		if(current_number>=10) return;
+		current_number+=1;
+	}
+
+	numberPassesLabel->setText(QString::number(current_number));
 }
 
 void Settings::addNewKernel(QList<double> kernel){
@@ -259,7 +290,7 @@ QList<QList<double> > Settings::getKernels(){
 	for(auto group : kernelGroups){
 		QGridLayout *layout = (QGridLayout*)group->layout();
 		QList<double> temp;
-		for(int x=0;x<9;x++){
+		for(int x=0;x<9;x++){ // parse every text box
 			temp.push_back(
 				((QLineEdit*)layout->itemAtPosition(x/3,x%3)->widget())
 					->text().toDouble()
@@ -270,11 +301,24 @@ QList<QList<double> > Settings::getKernels(){
 	return totalList;
 }
 
-Approximator::combinationTypes Settings::getCombinationType(){
-	if(averageButton->isChecked())
-		return Kernel::Approximator::AVERAGE;
-	else
-		return Kernel::Approximator::MAXIMUM;
+int Settings::getNumberPasses(){
+	return numberPassesLabel->text().toInt();
+}
+
+BaseApproximator* Settings::getApproximator(){
+	return localApproximator;
+}
+int Settings::startApproximator(QImage orig){
+	qRegisterMetaType<QList<QList<double> > >("QList<QList<double> >");
+	return
+	QMetaObject::invokeMethod(localApproximator,"processImage",
+							  Q_ARG(QImage,orig),
+							  Q_ARG(QList<QList<double> >, getKernels()),
+							  Q_ARG(int,getNumberPasses())
+							  );
+}
+int Settings::stopApproximator(){
+	return QMetaObject::invokeMethod(localApproximator,"stopProcessing");
 }
 
 }//namespace

@@ -30,11 +30,13 @@ SOURCES += \
     circleapproximator.cpp \
     imagelabel.cpp \
     circleapproximator_deltaselector.cpp \
-    kernelapproximator.cpp
+    kernelapproximator.cpp \
+    base.cpp
 
 HEADERS += \
         mainwindow.h \
     circleapproximator.h \
     imagelabel.h \
     circleapproximator_deltaselector.h \
-    kernelapproximator.h
+    kernelapproximator.h \
+    base.h

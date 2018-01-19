@@ -15,12 +15,14 @@
 #include <QGridLayout>
 #include <QSpinBox>
 #include <QLabel>
+#include "base.h"
 
 namespace Circle_DeltaSelector{
 
 using std::vector;
 using std::map;
 using std::unordered_map;
+class Settings;
 
 class DeltaMap{
 	/*
@@ -74,7 +76,7 @@ public:
  *  -- the second map is what new delta values are and will be used to iterate on the next pass
  *  -- the first map is deleted since it does not have anything in it
  */
-class Approximator : public QObject{
+class Approximator : public BaseApproximator{
 	Q_OBJECT
 	// temp vars for use in the processImage method - we save them externally so that i can call a method to do some work and not copy/paste the same thing 6 times
 	int curtX,nextX;
@@ -115,15 +117,19 @@ signals:
 
 };
 
-class Settings : public QWidget{
+class Settings : public BaseSettings{
 	Q_OBJECT
+	Approximator* localApproximator;
 public:
-	explicit Settings(QWidget *parent = 0);
+	explicit Settings();
 	int numCircles();
 	int minRadius();
 	int maxRadius();
 public slots:
 	void keepRadiusEntriesInSync();
+	BaseApproximator* getApproximator(); //returns a valid instance
+	int startApproximator(QImage orig);
+	int stopApproximator();
 protected:
 	QGridLayout *mainLayout;
 	QLabel *description;
