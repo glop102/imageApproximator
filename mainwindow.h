@@ -14,11 +14,9 @@
 #include <QProgressBar>
 
 #include <QThread>
-#include "circlesettings.h"
 #include "circleapproximator.h"
 #include "circleapproximator_deltaselector.h"
 #include "imagelabel.h"
-#include "edgesettings.h"
 #include "kernelapproximator.h"
 
 class MainWindow : public QMainWindow
@@ -45,17 +43,17 @@ private:
 	QProgressBar *progressBar;
 
 	QTabWidget *settingsMenu;
-	CircleSettings circleSettings;
-	CircleSettings_DeltaSelector circleSettings2;
-	EdgeSettings edgeSettings;
+	Circle::Settings circleSettings;
+	Circle_DeltaSelector::Settings circleSettings2;
+	Kernel::Settings edgeSettings;
 
 	QImage displayedImage;
 
 	QThread workerThread; // runs the wanted approximator in a different thread
 	bool workerThreadBusy;
-	CircleApproximator circleApproximator;
-	CircleApproximator_DeltaSelector circleApproximator_DeltaSelector;
-	KernelApproximator kernelApproximator;
+	Circle::Approximator circleApproximator;
+	Circle_DeltaSelector::Approximator circleApproximator_DeltaSelector;
+	Kernel::Approximator kernelApproximator;
 };
 
 #endif // MAINWINDOW_H

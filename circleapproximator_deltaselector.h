@@ -11,6 +11,12 @@
 #include <unordered_map>
 #include <random>
 #include <stdint.h>
+#include <QWidget>
+#include <QGridLayout>
+#include <QSpinBox>
+#include <QLabel>
+
+namespace Circle_DeltaSelector{
 
 using std::vector;
 using std::map;
@@ -30,6 +36,9 @@ class DeltaMap{
 	 * the map is a map of deltas to the first element of a linked list
 	 * the linked list contains the x,y coords and the delta it was
 	 * the unordered map is a fast lookup to the linked list using the coords - points to anywhere in the linked list
+	 *
+	 * When you change points as you paint, use the map to quickly find the right place in the linked list to modify
+	 * When lloking for the highest delta, use the linked list first node
 	 */
 private:
 	struct linked_element{
@@ -65,7 +74,7 @@ public:
  *  -- the second map is what new delta values are and will be used to iterate on the next pass
  *  -- the first map is deleted since it does not have anything in it
  */
-class CircleApproximator_DeltaSelector : public QObject{
+class Approximator : public QObject{
 	Q_OBJECT
 	// temp vars for use in the processImage method - we save them externally so that i can call a method to do some work and not copy/paste the same thing 6 times
 	int curtX,nextX;
@@ -94,14 +103,35 @@ class CircleApproximator_DeltaSelector : public QObject{
 	void initMap(QImage &image);
 	void updateMap(QImage &wantedImage, int centerX,int centerY,int radius,QColor color);
 public:
-	CircleApproximator_DeltaSelector();
-	~CircleApproximator_DeltaSelector();
+	Approximator();
+	~Approximator();
 public slots:
+	//void processImage(QImage orig, Settings settings);
 	void processImage(QImage orig, int numCircles, int minRadius, int maxRadius);
 	void stopProcessing(); // cancels the operation
 signals:
 	void progressMade(QImage,double percentage);
 	void doneProcessing(QImage);
+
 };
 
+class Settings : public QWidget{
+	Q_OBJECT
+public:
+	explicit Settings(QWidget *parent = 0);
+	int numCircles();
+	int minRadius();
+	int maxRadius();
+public slots:
+	void keepRadiusEntriesInSync();
+protected:
+	QGridLayout *mainLayout;
+	QLabel *description;
+	QSpinBox *numCirclesEntry,*minRadiusEntry,*maxRadiusEntry;
+	void makeWidgets();
+	void layoutWidgets();
+	void makeConnections();
+};
+
+} //namespace
 #endif // CIRCLEAPPROXIMATOR_DELTASELECTOR_H

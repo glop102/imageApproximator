@@ -29,16 +29,12 @@ SOURCES += \
         mainwindow.cpp \
     circleapproximator.cpp \
     imagelabel.cpp \
-    circlesettings.cpp \
     circleapproximator_deltaselector.cpp \
-    edgesettings.cpp \
     kernelapproximator.cpp
 
 HEADERS += \
         mainwindow.h \
     circleapproximator.h \
     imagelabel.h \
-    circlesettings.h \
     circleapproximator_deltaselector.h \
-    edgesettings.h \
     kernelapproximator.h

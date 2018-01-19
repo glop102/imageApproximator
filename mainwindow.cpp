@@ -123,13 +123,13 @@ void MainWindow::toggleApproximator(){
 									  );
 		}else if(currentTab == &edgeSettings){
 			qRegisterMetaType<QList<QList<double> > >("QList<QList<double> >");
-			qRegisterMetaType<KernelApproximator::combinationTypes>("KernelApproximator::combinationTypes");
+			qRegisterMetaType<Kernel::Approximator::combinationTypes>("Kernel::Approximator::combinationTypes");
 			QList<QList<double> > kernels = edgeSettings.getKernels();
 			ret =
 			QMetaObject::invokeMethod(&kernelApproximator,"processImage",
 									  Q_ARG(QImage,temp),
 									  Q_ARG(QList<QList<double> >, kernels),
-									  Q_ARG(KernelApproximator::combinationTypes,edgeSettings.getCombinationType())
+									  Q_ARG(Kernel::Approximator::combinationTypes,edgeSettings.getCombinationType())
 									  );
 		}
 		if(ret == false)

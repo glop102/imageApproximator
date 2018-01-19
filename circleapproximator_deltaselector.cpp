@@ -1,15 +1,16 @@
 #include "circleapproximator_deltaselector.h"
+namespace Circle_DeltaSelector {
 
-CircleApproximator_DeltaSelector::CircleApproximator_DeltaSelector(){
+Approximator::Approximator(){
 	map = new DeltaMap();
 	newMap = new DeltaMap();
 }
-CircleApproximator_DeltaSelector::~CircleApproximator_DeltaSelector(){
+Approximator::~Approximator(){
 	delete map;
 	delete newMap;
 }
 
-void CircleApproximator_DeltaSelector::processImage(QImage orig,int numCircles,int minR,int maxR){
+void Approximator::processImage(QImage orig,int numCircles,int minR,int maxR){
 	printf("starting circle approximation - delta selector\n");
 	QTime timer;
 	timer.start();
@@ -92,20 +93,20 @@ void CircleApproximator_DeltaSelector::processImage(QImage orig,int numCircles,i
 	emit doneProcessing(newImage);
 }
 
-void CircleApproximator_DeltaSelector::stopProcessing(){
+void Approximator::stopProcessing(){
 	if(keepGoing==true){
 		keepGoing = false;
 		printf("Stopping Circle Approximator\n");
 	}
 }
 
-int CircleApproximator_DeltaSelector::randRange(int low, int high){
+int Approximator::randRange(int low, int high){
 	int range = high - low;
 	double percentage = (rand()/(double)RAND_MAX);
 	return percentage*range+low;
 }
 
-double CircleApproximator_DeltaSelector::getScore(QImage &wantedImage, QImage &approximatedImage, QColor color, int centerX,int centerY, int radius){
+double Approximator::getScore(QImage &wantedImage, QImage &approximatedImage, QColor color, int centerX,int centerY, int radius){
 	//consider distance = sqrt(x*x + y*y);
 	//if you know distance and y, solving for x terms gives
 	//d*d - y*y = x*x
@@ -165,7 +166,7 @@ double CircleApproximator_DeltaSelector::getScore(QImage &wantedImage, QImage &a
 	return totalApprox-totalColor;
 }
 
-int CircleApproximator_DeltaSelector::getColorDelta(QColor c1, QColor c2){
+int Approximator::getColorDelta(QColor c1, QColor c2){
 	int temp,total=0;
 
 	temp = abs(c1.hslHue() - c2.hslHue());
@@ -180,7 +181,7 @@ int CircleApproximator_DeltaSelector::getColorDelta(QColor c1, QColor c2){
 	return total;
 }
 
-void CircleApproximator_DeltaSelector::drawCircle(QImage &image, int centerX, int centerY, int radius, QColor color){
+void Approximator::drawCircle(QImage &image, int centerX, int centerY, int radius, QColor color){
 	//consider distance = sqrt(x*x + y*y);
 	//if you know distance and y, solving for x terms gives
 	//d*d - y*y = x*x
@@ -229,7 +230,7 @@ void CircleApproximator_DeltaSelector::drawCircle(QImage &image, int centerX, in
 	//return image;
 }
 
-void CircleApproximator_DeltaSelector::randomSelectCurrentCircle(){
+void Approximator::randomSelectCurrentCircle(){
 //	curtX=randRange(0,origImage.width()-1);
 //	curtY=randRange(0,origImage.height()-1);
 	uint32_t x,y;
@@ -240,7 +241,7 @@ void CircleApproximator_DeltaSelector::randomSelectCurrentCircle(){
 	currentColor = QColor::fromRgba(origImage.pixel(curtX,curtY));
 }
 
-bool CircleApproximator_DeltaSelector::tryPermutationAndMakeNextIfBetter(int x, int y, int radius){
+bool Approximator::tryPermutationAndMakeNextIfBetter(int x, int y, int radius){
 	double score = getScore(origImage,newImage,currentColor,x,y,radius);
 	if(score>currentScore){
 		currentScore = score;
@@ -252,7 +253,7 @@ bool CircleApproximator_DeltaSelector::tryPermutationAndMakeNextIfBetter(int x, 
 		return false;
 }
 
-void CircleApproximator_DeltaSelector::initMap(QImage &image){
+void Approximator::initMap(QImage &image){
 	map->clear();
 	newMap->clear();
 	QColor c1,c2;
@@ -268,7 +269,7 @@ void CircleApproximator_DeltaSelector::initMap(QImage &image){
 		}
 	}
 }
-void CircleApproximator_DeltaSelector::updateMap(QImage &wantedImage, int centerX, int centerY, int radius,QColor color){
+void Approximator::updateMap(QImage &wantedImage, int centerX, int centerY, int radius,QColor color){
 	int width = wantedImage.width();
 	int minx=centerX-radius;
 	int maxx=centerX+radius;
@@ -316,6 +317,11 @@ void CircleApproximator_DeltaSelector::updateMap(QImage &wantedImage, int center
 	}
 }
 
+//=====================================================================================================================================================
+//=====================================================================================================================================================
+//		DeltaMap Class Below
+//=====================================================================================================================================================
+//=====================================================================================================================================================
 
 void DeltaMap::clear(){
 	//printf("clearing\n");
@@ -442,3 +448,72 @@ void DeltaMap::removeElement(linked_element *elm){
 long long DeltaMap::numPoints(){
 	return points.size();
 }
+
+//=====================================================================================================================================================
+//=====================================================================================================================================================
+//		Settings Class Below
+//=====================================================================================================================================================
+//=====================================================================================================================================================
+
+Settings::Settings(QWidget *parent) : QWidget(parent){
+	makeWidgets();
+	layoutWidgets();
+	makeConnections();
+}
+void Settings::keepRadiusEntriesInSync(){
+	QObject *sender = QObject::sender();
+	int min = minRadiusEntry->value();
+	int max = maxRadiusEntry->value();
+
+	if(min<=max) return; // makes sense, the max value is large than the min
+
+	if(sender == minRadiusEntry){
+		maxRadiusEntry->setValue(min);
+	}else{
+		minRadiusEntry->setValue(max);
+	}
+}
+
+int Settings::numCircles(){
+	return numCirclesEntry->value();
+}
+int Settings::minRadius(){
+	return minRadiusEntry->value();
+}
+int Settings::maxRadius(){
+	return maxRadiusEntry->value();
+}
+void Settings::makeWidgets(){
+	description = new QLabel("This chooses the pixels that are the most wrong to try to put a circle at");
+	numCirclesEntry = new QSpinBox();
+	minRadiusEntry = new QSpinBox();
+	maxRadiusEntry = new QSpinBox();
+
+	description->setWordWrap(true);
+	numCirclesEntry->setMinimum(1);
+	numCirclesEntry->setMaximum(1000000000);
+	numCirclesEntry->setValue(15000);
+	minRadiusEntry->setMinimum(1);
+	minRadiusEntry->setMaximum(9999);
+	minRadiusEntry->setValue(5);
+	maxRadiusEntry->setMinimum(1);
+	maxRadiusEntry->setMaximum(10000);
+	maxRadiusEntry->setValue(150);
+}
+void Settings::layoutWidgets(){
+	mainLayout = new QGridLayout();
+	setLayout(mainLayout);
+	mainLayout->addWidget(description,0,0,1,3);
+	mainLayout->addWidget(new QLabel("Num Circles"),1,0);
+	mainLayout->addWidget(numCirclesEntry,2,0);
+	mainLayout->addWidget(new QLabel("Min Radius"),1,1);
+	mainLayout->addWidget(minRadiusEntry,2,1);
+	mainLayout->addWidget(new QLabel("Max Radius"),1,2);
+	mainLayout->addWidget(maxRadiusEntry,2,2);
+}
+void Settings::makeConnections(){
+	connect(minRadiusEntry,SIGNAL(valueChanged(int)),this,SLOT(keepRadiusEntriesInSync()) );
+	connect(maxRadiusEntry,SIGNAL(valueChanged(int)),this,SLOT(keepRadiusEntriesInSync()) );
+}
+
+} //namespace
