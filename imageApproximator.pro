@@ -23,6 +23,8 @@ DEFINES += QT_DEPRECATED_WARNINGS
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
 QMAKE_CXXFLAGS += -std=c++11
+QMAKE_CXXFLAGS += -fopenmp
+LIBS += -fopenmp
 
 SOURCES += \
         main.cpp \
@@ -31,7 +33,8 @@ SOURCES += \
     imagelabel.cpp \
     circleapproximator_deltaselector.cpp \
     kernelapproximator.cpp \
-    base.cpp
+    base.cpp \
+    keypoint.cpp
 
 HEADERS += \
         mainwindow.h \
@@ -39,4 +42,5 @@ HEADERS += \
     imagelabel.h \
     circleapproximator_deltaselector.h \
     kernelapproximator.h \
-    base.h
+    base.h \
+    keypoint.h

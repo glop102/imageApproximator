@@ -1,35 +1,35 @@
 #include "kernelapproximator.h"
 namespace Kernel{
 
-QImage Approximator::applyKernel(QImage orig, QList<double> kernel, bool absolute){
+// MAKE FASTER WITH DIRECT BYTE ACCESS
+// orig.bits()
+// orig.bytesPerLine()
+QImage Approximator::applyKernel(QImage orig, const QList<double> kernel, const bool absolute){
 	QImage dest(orig.width(),orig.height(),orig.format());
 	dest.fill(Qt::black);
 	double divisor = calculateKernelDivisor(kernel);
-	for(int y=1; y<orig.height()-1; y++){
-		for(int x=1; x<orig.width()-1; x++){
+	int ks = sqrt(kernel.size()) / 2; // kernel size
+	uchar *pix = orig.bits();
+
+	//QElapsedTimer benchmark;
+	//benchmark.start();
+	#pragma omp parallel for schedule(static)
+	for(int y=ks; y<orig.height()-ks; y++){ // for each line
+		for(int x=ks; x<orig.width()-ks; x++){ // for each vertical
 			int r=0,g=0,b=0;
 			QColor temp;
-
-			temp = orig.pixelColor(x-1,y-1);
-			r+=temp.red()*kernel[0];g+=temp.green()*kernel[0];b+=temp.blue()*kernel[0];
-			temp = orig.pixelColor(x  ,y-1);
-			r+=temp.red()*kernel[1];g+=temp.green()*kernel[1];b+=temp.blue()*kernel[1];
-			temp = orig.pixelColor(x+1,y-1);
-			r+=temp.red()*kernel[2];g+=temp.green()*kernel[2];b+=temp.blue()*kernel[2];
-
-			temp = orig.pixelColor(x-1,y  );
-			r+=temp.red()*kernel[3];g+=temp.green()*kernel[3];b+=temp.blue()*kernel[3];
-			temp = orig.pixelColor(x  ,y  );
-			r+=temp.red()*kernel[4];g+=temp.green()*kernel[4];b+=temp.blue()*kernel[4];
-			temp = orig.pixelColor(x+1,y  );
-			r+=temp.red()*kernel[5];g+=temp.green()*kernel[5];b+=temp.blue()*kernel[5];
-
-			temp = orig.pixelColor(x-1,y+1);
-			r+=temp.red()*kernel[6];g+=temp.green()*kernel[6];b+=temp.blue()*kernel[6];
-			temp = orig.pixelColor(x  ,y+1);
-			r+=temp.red()*kernel[7];g+=temp.green()*kernel[7];b+=temp.blue()*kernel[7];
-			temp = orig.pixelColor(x+1,y+1);
-			r+=temp.red()*kernel[8];g+=temp.green()*kernel[8];b+=temp.blue()*kernel[8];
+			int kernelIndex = 0;
+			for(int dy=-ks; dy<=ks; dy++){ // for each kernel row
+				for(int dx=-ks; dx<=ks; dx++){ //for each kernel vertical
+					unsigned long offset = (y+dy) * orig.bytesPerLine();
+					offset += ((x+dx)*4);
+					temp = orig.pixelColor(x+dx,y+dy);
+					r+=kernel[kernelIndex]*pix[offset+2];
+					g+=kernel[kernelIndex]*pix[offset+1];
+					b+=kernel[kernelIndex]*pix[offset+0];
+					kernelIndex++;
+				}
+			}
 
 			if(absolute){
 				temp.setRed(abs(r)/divisor);
@@ -43,10 +43,16 @@ QImage Approximator::applyKernel(QImage orig, QList<double> kernel, bool absolut
 			dest.setPixel(x,y,temp.rgb());
 		}
 	}
+	//long long time = benchmark.elapsed();
+	//printf("Image Kernal Apply Time : %lld\n",time);
 	return dest;
 }
 
 void Approximator::processImage(QImage orig, QList<QList<double> > kernels, int numPasses, bool absolute){
+	printf("starting kernel approximator\n");
+	QElapsedTimer timer;
+	timer.start();
+
 	orig = orig.convertToFormat(QImage::Format_ARGB32_Premultiplied); // make sure we know the format
 	stopSignalRecieved = false;
 	double progress_step =  // how much each step is worth percentage wise
@@ -82,6 +88,7 @@ void Approximator::processImage(QImage orig, QList<QList<double> > kernels, int 
 		orig = temp; // time for another pass
 	}
 
+	printf("Done Approximating after %lld ms\n",timer.elapsed());
 	emit doneProcessing(orig);
 
 }
@@ -116,6 +123,7 @@ QImage Approximator::combine_maximum(QList<QImage> images){
 	//gets the largest value per channel per pixel from all the canidate input images
 	//output is the max values encountered
 	QImage combined(images[0].width(),images[0].height(),images[0].format());
+	#pragma omp parallel for schedule(static)
 	for(int y=0; y<combined.height(); y++){
 		for(int x=0; x<combined.width(); x++){
 			int r=0,g=0,b=0;
@@ -137,6 +145,7 @@ QImage Approximator::combine_extreme(QList<QImage> images){
 	//gets the value closest to 0 or 256 per channel per pixel
 	//output is the max values encountered
 	QImage combined(images[0].width(),images[0].height(),images[0].format());
+	#pragma omp parallel for schedule(static)
 	for(int y=0; y<combined.height(); y++){
 		for(int x=0; x<combined.width(); x++){
 			int r=0,g=0,b=0;
@@ -177,7 +186,7 @@ Settings::Settings(){
 
 	numberPasses->setMaximum(10);
 	numberPasses->setMinimum(1);
-	numberPasses->setValue(2);
+	numberPasses->setValue(1);
 	numberKernels->setMaximum(10);
 	numberKernels->setMinimum(1);
 	numberKernels->setValue(4);

@@ -17,7 +17,10 @@
 #include <QLineEdit>
 #include <QDoubleValidator>
 #include <QSpinBox>
+#include <QElapsedTimer>
 #include "base.h"
+#include <math.h>
+#include <omp.h>
 
 namespace Kernel {
 class Settings;
@@ -28,7 +31,7 @@ protected:
 	bool stopSignalRecieved;
 	double calculateKernelDivisor(QList<double> kernel);
 public:
-	QImage applyKernel(QImage orig, QList<double> kernel, bool absolute);
+	QImage applyKernel(QImage orig, const QList<double> kernel, const bool absolute);
 
 	QImage combine_maximum(QList<QImage> images);
 	QImage combine_extreme(QList<QImage> images);

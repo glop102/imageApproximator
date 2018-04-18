@@ -18,6 +18,7 @@
 #include "circleapproximator_deltaselector.h"
 #include "imagelabel.h"
 #include "kernelapproximator.h"
+#include "keypoint.h"
 
 class MainWindow : public QMainWindow{
 	Q_OBJECT
@@ -51,6 +52,7 @@ private:
 	Circle::Settings circleSettings;
 	Circle_DeltaSelector::Settings circleSettings2;
 	Kernel::Settings edgeSettings;
+	Keypoint::Settings keypointSettings;
 
 	QImage displayedImage;
 

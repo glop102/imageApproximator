@@ -90,6 +90,9 @@ int Approximator::randRange(int low, int high){
 }
 
 double Approximator::getScore(QImage &wantedImage, QImage &approximatedImage, QColor color, int centerX,int centerY, int radius){
+	//it returns a score of how much BETTER the circle will be than the current approximation
+	//A postitive return is a better circle than what is currently there
+
 	//consider distance = sqrt(x*x + y*y);
 	//if you know distance and y, solving for x terms gives
 	//d*d - y*y = x*x
@@ -100,10 +103,9 @@ double Approximator::getScore(QImage &wantedImage, QImage &approximatedImage, QC
 	//this covers the typical case as we only really need to know if it is
 	//intersecting any other colored areas on the circumference
 
-	//it returns a score of how much BETTER the circle will be than the current approximation
 	//so it gets the total difference of the current approximation and the difference the
-	//circle will have if drawn. If the new<current, then we an improvment.
-	//This favors larger circles as a larger circle will potentially cover more area that
+	//circle will have if drawn. If the new<current, then the new is less different than current frrom the wanted
+	//This also favors larger circles as a larger circle will potentially cover more area that
 	//is wrong and so has the chance to accrue more improvment over its longer circumference
 
 	long long totalApprox=0; // where we store the combined error of the pixels
@@ -119,7 +121,7 @@ double Approximator::getScore(QImage &wantedImage, QImage &approximatedImage, QC
 	if(maxx>=wantedImage.width()) maxx=wantedImage.width()-1;
 	if(maxy>=wantedImage.height()) maxy=wantedImage.height()-1;
 
-	if(maxy<=miny || maxx<=minx) return -10000; //something is not making sense
+	if(maxy<=miny || maxx<=minx) return -10000; //something is not making sense, return a really bad estimate
 
 	int unSqauredRadius = precomputedDistance[radius]; // the max distance from the center anything should go
 	for(int y=miny;y<=maxy;y++){
@@ -174,6 +176,7 @@ void Approximator::drawCircle(QImage &image, int centerX, int centerY, int radiu
 
 	//it starts from the top of the circle and goes down
 	//for every row, it starts from the middle and moves outwards
+	//This is used because it is faster the the QPainter drawing the circle
 
 	//QImage image = oldImage;
 	uchar *bits = image.bits(); // faster to directly modify bytes - the setPixel method is slow

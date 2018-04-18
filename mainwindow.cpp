@@ -2,6 +2,7 @@
 
 /*
  * ADDING A NEW APPROXIMATOR
+ * fast reference, look at addApproximators() and destructor
  *
  * you need two objects
  * - settings for the approximator
@@ -31,6 +32,7 @@ void MainWindow::addApproximators(){
 	settingsMenu->addTab(&circleSettings,"Circle-Random");
 	settingsMenu->addTab(&circleSettings2,"Circle-Stable");
 	settingsMenu->addTab(&edgeSettings,"Edge Detector");
+	//settingsMenu->addTab(&keypointSettings,"Keypoints");
 
 	connect(circleSettings.getApproximator(),SIGNAL(progressMade(QImage,double)),this,SLOT(updateProgress(QImage,double)) );
 	connect(circleSettings.getApproximator(),SIGNAL(doneProcessing(QImage)),this,SLOT(finalImageApproximation(QImage)) );
@@ -38,10 +40,13 @@ void MainWindow::addApproximators(){
 	connect(circleSettings2.getApproximator(),SIGNAL(doneProcessing(QImage)),this,SLOT(finalImageApproximation(QImage)) );
 	connect(edgeSettings.getApproximator(),SIGNAL(progressMade(QImage,double)),this,SLOT(updateProgress(QImage,double)) );
 	connect(edgeSettings.getApproximator(),SIGNAL(doneProcessing(QImage)),this,SLOT(finalImageApproximation(QImage)) );
+	connect(keypointSettings.getApproximator(),SIGNAL(progressMade(QImage,double)),this,SLOT(updateProgress(QImage,double)) );
+	connect(keypointSettings.getApproximator(),SIGNAL(doneProcessing(QImage)),this,SLOT(finalImageApproximation(QImage)) );
 
 	circleSettings.getApproximator()->moveToThread(&workerThread);
 	circleSettings2.getApproximator()->moveToThread(&workerThread);
 	edgeSettings.getApproximator()->moveToThread(&workerThread);
+	keypointSettings.getApproximator()->moveToThread(&workerThread);
 	workerThread.start();
 }
 void MainWindow::constructGUI(){
@@ -49,7 +54,8 @@ void MainWindow::constructGUI(){
 	setCentralWidget( new QWidget() );
 	centralWidget()->setLayout(mainLayout);
 
-	imageLocationLabel = new QLabel("/media/RAID/Documents/Pictures/tumblr/9cRJB3e.png");
+	//imageLocationLabel = new QLabel("/media/RAID/Documents/Pictures/tumblr/9cRJB3e.png");
+	imageLocationLabel = new QLabel("/media/RAID/Documents/Pictures/Wallpapers/phlshu.png");
 	imageLocationButton = new QPushButton("Select Image");
 	saveButton = new QPushButton("Save");
 	startButton = new QPushButton("Start");
@@ -85,6 +91,7 @@ MainWindow::~MainWindow(){
 	circleSettings.stopApproximator();
 	circleSettings2.stopApproximator();
 	edgeSettings.stopApproximator();
+	keypointSettings.stopApproximator();
 	workerThread.quit();
 	workerThread.wait();
 }
