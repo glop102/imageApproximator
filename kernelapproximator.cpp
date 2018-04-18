@@ -80,7 +80,7 @@ void Approximator::processImage(QImage orig, QList<QList<double> > kernels, int 
 		if(absolute)
 			temp = combine_maximum(images);
 		else
-			temp = combine_extreme(images);
+			temp = combine_extreme_pixels(images);
 		steps_taken++;
 		emit(progressMade(temp,steps_taken*progress_step));
 		numPasses--;
@@ -141,7 +141,7 @@ QImage Approximator::combine_maximum(QList<QImage> images){
 	}
 	return combined;
 }
-QImage Approximator::combine_extreme(QList<QImage> images){
+QImage Approximator::combine_extreme_channels(QList<QImage> images){
 	//gets the value closest to 0 or 256 per channel per pixel
 	//output is the max values encountered
 	QImage combined(images[0].width(),images[0].height(),images[0].format());
@@ -157,6 +157,32 @@ QImage Approximator::combine_extreme(QList<QImage> images){
 					g=color.green()-128;
 				if(abs(color.blue()-128)>abs(b))
 					b=color.blue()-128;
+			}
+			combined.setPixelColor(x,y,QColor(r+128,g+128,b+128));
+		}
+	}
+	return combined;
+}
+QImage Approximator::combine_extreme_pixels(QList<QImage> images){
+	//gets the pixel closest to 0 or 256, not per channel
+	//output is the max values encountered
+	QImage combined(images[0].width(),images[0].height(),images[0].format());
+	#pragma omp parallel for schedule(static)
+	for(int y=0; y<combined.height(); y++){
+		for(int x=0; x<combined.width(); x++){
+			int r=0,g=0,b=0;
+			int sum=0;
+			for(int i=0; i<images.length(); i++){
+				QColor color = images[i].pixelColor(x,y);
+				int new_sum = abs(color.red()-128);
+				new_sum += abs(color.green()-128);
+				new_sum += abs(color.blue()-128);
+				if(sum<new_sum){
+					r=color.red()-128;
+					g=color.green()-128;
+					b=color.blue()-128;
+					sum = new_sum;
+				}
 			}
 			combined.setPixelColor(x,y,QColor(r+128,g+128,b+128));
 		}
@@ -212,8 +238,8 @@ Settings::Settings(){
 
 	addNewKernel({-1,0,1,-2,0,2,-1,0,1}); // horizontal
 	addNewKernel({-1,-2,-1,0,0,0,1,2,1}); // vertical
-	addNewKernel({0,1,2,-1,0,1,-2,-1,0}); // diag (top right to bot left)
-	addNewKernel({2,1,0,1,0,-1,0,-1,-2}); // diag (top left to bot right)
+	addNewKernel({0,-1,-2,1,0,-1,2,1,0}); // diag (top right to bot left)
+	addNewKernel({-2,-1,0,-1,0,1,0,1,2}); // diag (top left to bot right)
 }
 
 void Settings::numberKernelsChange(){

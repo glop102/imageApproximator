@@ -34,7 +34,8 @@ public:
 	QImage applyKernel(QImage orig, const QList<double> kernel, const bool absolute);
 
 	QImage combine_maximum(QList<QImage> images);
-	QImage combine_extreme(QList<QImage> images);
+	QImage combine_extreme_channels(QList<QImage> images);
+	QImage combine_extreme_pixels(QList<QImage> images);
 
 public slots:
 	//void processImage(QImage orig, Settings settingsHolder);
