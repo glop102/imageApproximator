@@ -15,6 +15,7 @@
 #include <QSpinBox>
 #include <QLabel>
 #include "base.h"
+#include <omp.h>
 
 namespace Circle{
 
@@ -25,13 +26,15 @@ class Approximator : public BaseApproximator{
 	Q_OBJECT
 private:
 	// temp vars for use in the processImage method - we save them externally so that i can call a method to do some work and not copy/paste the same thing 6 times
-	int curtX,nextX;
-	int curtY,nextY;
-	int curtRadius,nextRadius;
-	QColor currentColor;
-	QImage newImage;
-	double currentScore; // amount of change between modified image and original image
+	struct Circle{
+		int centerX=0,centerY=0;
+		int radius=0;
+		QColor color;
+		double score=0; // amount of change between modified image and original image
+	};
+
 	vector<int> precomputedDistance;
+	QImage currentApproximation;
 
 	//other stuff
 	QImage origImage;
@@ -40,11 +43,11 @@ private:
 	int maxRadius;
 
 	int randRange(int low,int high); // warning - is inclusive of the high number
-	double getScore(QImage &firstImage, QImage &secondImage, QColor color, int x,int y, int radius);
+	double getScore(QImage &firstImage, QImage &secondImage, int centerX, int centerY, int radius, QColor color);
 	int getColorDelta(QColor c1, QColor c2);
-	void drawCircle(QImage &image,int x, int y, int radius, QColor color);
-	void randomSelectCurrentCircle();
-	bool tryPermutationAndMakeNextIfBetter(int x, int y, int radius);
+	void drawCircle(QImage &image,struct Circle *);
+	void randomSelectCurrentCircle(struct Circle *);
+	bool tryPermutationForBetterCircle(struct Circle *);
 
 public slots:
 	void processImage(QImage orig, int numCircles, int minRadius, int maxRadius);

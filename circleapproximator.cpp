@@ -5,6 +5,8 @@ void Approximator::processImage(QImage orig,int numCircles,int minR,int maxR){
 	printf("starting circle approximation - random selector\n");
 	QTime timer;
 	timer.start();
+
+	//Some work to be done before getting started
 	origImage = orig.convertToFormat(QImage::Format_ARGB32_Premultiplied); // make sure we know the format
 	keepGoing = true;
 	minRadius = minR;
@@ -18,62 +20,39 @@ void Approximator::processImage(QImage orig,int numCircles,int minR,int maxR){
 	if(maxRadius>origImage.height()/2) maxRadius=origImage.height()/2;
 	if(minRadius>maxRadius) minRadius = maxRadius;
 
-	newImage = QImage(origImage.width(),origImage.height(),QImage::Format_ARGB32_Premultiplied);
-	newImage.fill(0); // clear the image
+	currentApproximation = QImage(origImage.width(),origImage.height(),QImage::Format_ARGB32_Premultiplied);
+	currentApproximation.fill(0); // clear the image
 
-	for(int circle=0; circle<numCircles && keepGoing; circle++){
-		//printf("making a circle\n");
+	for(int circle_num=0; circle_num<numCircles && keepGoing; circle_num++){
+		struct Circle circle;
 		//find a circle that helps make things better
-		currentScore=-1;
-		while(currentScore<=0){
-			randomSelectCurrentCircle();
-			currentScore = getScore(origImage,newImage,currentColor,curtX,curtY,curtRadius);
-		}
+		do{
+			randomSelectCurrentCircle(&circle);
+			circle.score = getScore(origImage,currentApproximation,
+										   circle.centerX,circle.centerY,circle.radius,circle.color);
+		}while(circle.score<=0);
+
 		//printf("optimising a circle\n");
-
-		nextX=curtX; // assume it will be the best circle
-		nextY=curtY;
-		nextRadius=curtRadius;
-
-		//permutate the circle until optimised
-		int numTests = 0;
+		//permutate the circle until optimized
 		while(true){
-			numTests++;
-			if(curtX > 0)
-				tryPermutationAndMakeNextIfBetter(curtX-1,curtY,curtRadius);
-			if(curtX < origImage.width())
-				tryPermutationAndMakeNextIfBetter(curtX+1,curtY,curtRadius);
-			if(curtY > 0)
-				tryPermutationAndMakeNextIfBetter(curtX,curtY-1,curtRadius);
-			if(curtY < origImage.height())
-				tryPermutationAndMakeNextIfBetter(curtX,curtY+1,curtRadius);
-			if(curtRadius>minRadius)
-				tryPermutationAndMakeNextIfBetter(curtX,curtY,curtRadius-1);
-			if(curtRadius<maxRadius){
-				tryPermutationAndMakeNextIfBetter(curtX,curtY,curtRadius+1);
-			}
+			bool found_better = tryPermutationForBetterCircle(&circle);
 
 			//if we have already reached a local maxima
-			if(curtX == nextX && curtY == nextY && curtRadius == nextRadius){
+			if(! found_better){
 				//make and save the current best approximation we have - this includes the circle we just found
-				drawCircle(newImage,curtX,curtY,curtRadius,currentColor);
+				drawCircle(currentApproximation,&circle);
 				//newImage = drawCircle(newImage,curtX,curtY,curtRadius,currentColor);
 				break;
-			}else{
-				//we found a new better circle so lets move over to it and try again
-				curtX=nextX;
-				curtY=nextY;
-				curtRadius=nextRadius;
 			}
 		}
 
-		double percentage = (circle+1)/(double)numCircles*100;
-		emit progressMade(newImage,percentage);
+		double percentage = (circle_num+1)/(double)numCircles*100;
+		emit progressMade(currentApproximation,percentage);
 		QCoreApplication::processEvents();
 		//printf("emited picture %d - r %5d  - pos %5d x %5d - %5d tests - delta %5.5f\n",circle,curtRadius,curtX,curtY,numTests,currentDelta);
 	}
 	printf("Done Approximating after %d ms\n",timer.elapsed());
-	emit doneProcessing(newImage);
+	emit doneProcessing(currentApproximation);
 }
 
 void Approximator::stopProcessing(){
@@ -89,7 +68,7 @@ int Approximator::randRange(int low, int high){
 	return percentage*range+low;
 }
 
-double Approximator::getScore(QImage &wantedImage, QImage &approximatedImage, QColor color, int centerX,int centerY, int radius){
+double Approximator::getScore(QImage &wantedImage, QImage &approximatedImage, int centerX, int centerY, int radius, QColor color){
 	//it returns a score of how much BETTER the circle will be than the current approximation
 	//A postitive return is a better circle than what is currently there
 
@@ -154,20 +133,24 @@ double Approximator::getScore(QImage &wantedImage, QImage &approximatedImage, QC
 
 int Approximator::getColorDelta(QColor c1, QColor c2){
 	int temp,total=0;
+	int h1,s1,l1,a1;
+	c1.getHsl(&h1,&s1,&l1,&a1);
+	int h2,s2,l2,a2;
+	c2.getHsl(&h2,&s2,&l2,&a2);
 
-	temp = abs(c1.hslHue() - c2.hslHue());
+	temp = abs(h1-h2);
 	total += temp;
-	temp = abs(c1.hslSaturation() - c2.hslSaturation());
+	temp = abs(s1-s2);
 	total += temp;
-	temp = abs(c1.lightness() - c2.lightness());
+	temp = abs(l1-l2);
 	total += temp*temp;
-	temp = abs(c1.alpha() - c2.alpha());
+	temp = abs(a1-a2);
 	total += temp;
 
 	return total;
 }
 
-void Approximator::drawCircle(QImage &image, int centerX, int centerY, int radius, QColor color){
+void Approximator::drawCircle(QImage &image, struct Circle * circle){
 	//consider distance = sqrt(x*x + y*y);
 	//if you know distance and y, solving for x terms gives
 	//d*d - y*y = x*x
@@ -177,6 +160,11 @@ void Approximator::drawCircle(QImage &image, int centerX, int centerY, int radiu
 	//it starts from the top of the circle and goes down
 	//for every row, it starts from the middle and moves outwards
 	//This is used because it is faster the the QPainter drawing the circle
+
+	int centerX = circle->centerX;
+	int centerY = circle->centerY;
+	int radius = circle->radius;
+	QColor color = circle->color;
 
 	//QImage image = oldImage;
 	uchar *bits = image.bits(); // faster to directly modify bytes - the setPixel method is slow
@@ -217,23 +205,50 @@ void Approximator::drawCircle(QImage &image, int centerX, int centerY, int radiu
 	//return image;
 }
 
-void Approximator::randomSelectCurrentCircle(){
-	curtX=randRange(0,origImage.width()-1);
-	curtY=randRange(0,origImage.height()-1);
-	curtRadius = minRadius;
-	currentColor = QColor::fromRgba(origImage.pixel(curtX,curtY));
+void Approximator::randomSelectCurrentCircle(struct Circle * circle){
+	circle->centerX=randRange(0,origImage.width()-1);
+	circle->centerY=randRange(0,origImage.height()-1);
+	circle->radius = minRadius;
+	circle->color = QColor::fromRgba(origImage.pixel(circle->centerX,circle->centerY));
 }
 
-bool Approximator::tryPermutationAndMakeNextIfBetter(int x, int y, int radius){
-	double score = getScore(origImage,newImage,currentColor,x,y,radius);
-	if(score>currentScore){
-		currentScore = score;
-		nextX=x;
-		nextY=y;
-		nextRadius=radius;
+bool Approximator::tryPermutationForBetterCircle(struct Circle *circle){
+	double
+		score1 = getScore(origImage,currentApproximation,circle->centerX+1,circle->centerY,circle->radius,circle->color),
+		score2 = getScore(origImage,currentApproximation,circle->centerX-1,circle->centerY,circle->radius,circle->color),
+		score3 = getScore(origImage,currentApproximation,circle->centerX,circle->centerY+1,circle->radius,circle->color),
+		score4 = getScore(origImage,currentApproximation,circle->centerX,circle->centerY-1,circle->radius,circle->color),
+		score5 = getScore(origImage,currentApproximation,circle->centerX,circle->centerY,circle->radius+1,circle->color),
+		score6 = getScore(origImage,currentApproximation,circle->centerX,circle->centerY,circle->radius-1,circle->color)
+	;
+
+	if( circle->centerX<origImage.width()			&& score1>circle->score && score1>score2 && score1>score3 && score1>score4 && score1>score5 && score1>score6 ){
+		circle->centerX += 1;
+		circle->score = score1;
 		return true;
-	}else
-		return false;
+	} else if( circle->centerX>0					&& score2>circle->score && score2>score3 && score2>score4 && score2>score5 && score2>score6 ){
+		circle->centerX -= 1;
+		circle->score = score2;
+		return true;
+	} else if( circle->centerY<origImage.height()	&& score3>circle->score && score3>score4 && score3>score5 && score3>score6 ){
+		circle->centerY += 1;
+		circle->score = score3;
+		return true;
+	} else if( circle->centerY>0					&& score4>circle->score && score4>score5 && score4>score6 ){
+		circle->centerY -= 1;
+		circle->score = score4;
+		return true;
+	} else if( circle->radius<maxRadius				&& score5>circle->score && score5>score6 ){
+		circle->radius += 1;
+		circle->score = score5;
+		return true;
+	} else if( circle->radius>minRadius				&& score6>circle->score ){
+		circle->radius -= 1;
+		circle->score = score6;
+		return true;
+	}
+
+	return false;
 }
 
 //======================================================================================================================================
