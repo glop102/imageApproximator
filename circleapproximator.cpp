@@ -23,33 +23,83 @@ void Approximator::processImage(QImage orig,int numCircles,int minR,int maxR){
 	currentApproximation = QImage(origImage.width(),origImage.height(),QImage::Format_ARGB32_Premultiplied);
 	currentApproximation.fill(0); // clear the image
 
-	for(int circle_num=0; circle_num<numCircles && keepGoing; circle_num++){
-		struct Circle circle;
-		//find a circle that helps make things better
-		do{
-			randomSelectCurrentCircle(&circle);
-			circle.score = getScore(origImage,currentApproximation,
-										   circle.centerX,circle.centerY,circle.radius,circle.color);
-		}while(circle.score<=0);
+//	#pragma omp parallel for schedule(dynamic)
+//	for(int circle_num=0; circle_num<numCircles; circle_num++){
+//		//if(!keepGoing) break;
 
-		//printf("optimising a circle\n");
-		//permutate the circle until optimized
-		while(true){
-			bool found_better = tryPermutationForBetterCircle(&circle);
+//		struct Circle circle;
+//		//find a circle that helps make things better
+//		do{
+//			randomSelectCurrentCircle(&circle);
+//			circle.score = getScore(origImage,currentApproximation,
+//										   circle.centerX,circle.centerY,circle.radius,circle.color);
+//		}while(circle.score<=0);
 
-			//if we have already reached a local maxima
-			if(! found_better){
-				//make and save the current best approximation we have - this includes the circle we just found
-				drawCircle(currentApproximation,&circle);
-				//newImage = drawCircle(newImage,curtX,curtY,curtRadius,currentColor);
-				break;
-			}
+//		//printf("optimising a circle\n");
+//		//permutate the circle until optimized
+//		while(true){
+//			bool found_better = tryPermutationForBetterCircle(&circle);
+//			//if we have already reached a local maxima
+//			if(! found_better)
+//				break;
+//		}
+//		//#pragma omp barrier
+//		#pragma omp critical
+//		drawCircle(currentApproximation,&circle);
+//		//#pragma omp barrier
+
+//		//#pragma omp single
+//		{
+//			double percentage = (circle_num+1)/(double)numCircles*100;
+//			emit progressMade(currentApproximation,percentage);
+//			QCoreApplication::processEvents();
+//		}
+//		//printf("emited picture %d - r %5d  - pos %5d x %5d - %5d tests - delta %5.5f\n",circle,curtRadius,curtX,curtY,numTests,currentDelta);
+//	}
+
+	#pragma omp parallel
+	{
+		int num_threads;
+		int circlesPerThread;
+		#pragma omp critical
+		{
+			num_threads = omp_get_num_threads();
+			circlesPerThread = numCircles / num_threads;
+			if(omp_get_thread_num() == num_threads-1)
+				circlesPerThread += numCircles % num_threads; //the last thread gets the left over number of circles
 		}
+		int circle_num = 0;
 
-		double percentage = (circle_num+1)/(double)numCircles*100;
-		emit progressMade(currentApproximation,percentage);
-		QCoreApplication::processEvents();
-		//printf("emited picture %d - r %5d  - pos %5d x %5d - %5d tests - delta %5.5f\n",circle,curtRadius,curtX,curtY,numTests,currentDelta);
+		while(circle_num<circlesPerThread){
+
+			struct Circle circle;
+			do{ //find a circle that helps make things better
+				randomSelectCurrentCircle(&circle);
+				circle.score = getScore(origImage,currentApproximation,
+											   circle.centerX,circle.centerY,circle.radius,circle.color);
+			}while(circle.score<=0);
+
+			//permutate the circle until optimized
+			while(true){
+				bool found_better = tryPermutationForBetterCircle(&circle);
+				if(! found_better)
+					break;
+			}
+
+			#pragma omp barrier
+			#pragma omp critical
+			drawCircle(currentApproximation,&circle);
+			#pragma omp barrier
+			if(!keepGoing)break;
+
+			#pragma omp master
+			{ // emit details of progress
+				double percentage = (circle_num+1)/(double)circlesPerThread*100;
+				emit progressMade(currentApproximation,percentage);
+				QCoreApplication::processEvents();
+			}
+			circle_num++;
+		}
 	}
 	printf("Done Approximating after %d ms\n",timer.elapsed());
 	emit doneProcessing(currentApproximation);

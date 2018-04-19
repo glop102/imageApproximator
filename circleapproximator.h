@@ -16,6 +16,7 @@
 #include <QLabel>
 #include "base.h"
 #include <omp.h>
+#include <atomic>
 
 namespace Circle{
 
@@ -38,7 +39,7 @@ private:
 
 	//other stuff
 	QImage origImage;
-	bool keepGoing;
+	std::atomic<bool> keepGoing;
 	int minRadius;
 	int maxRadius;
 
