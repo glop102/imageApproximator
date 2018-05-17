@@ -57,7 +57,7 @@ void Approximator::processImage(QImage orig,int numCircles,int minR,int maxR){
 //		//printf("emited picture %d - r %5d  - pos %5d x %5d - %5d tests - delta %5.5f\n",circle,curtRadius,curtX,curtY,numTests,currentDelta);
 //	}
 
-	#pragma omp parallel
+	#pragma omp parallel shared(keepGoing)
 	{
 		int num_threads;
 		int circlesPerThread;
@@ -86,11 +86,22 @@ void Approximator::processImage(QImage orig,int numCircles,int minR,int maxR){
 					break;
 			}
 
-			#pragma omp barrier
+			#pragma omp master
+			{ // master takes out locks for the critical section below to keep values from changing
+				keepGoing_WriteReadLock.lock();
+			}
+			#pragma omp barrier // when master gets here, we know all write locks are in place
 			#pragma omp critical
-			drawCircle(currentApproximation,&circle);
-			#pragma omp barrier
+			{ // these are things that are not thread-safe
+				drawCircle(currentApproximation,&circle);
+			}
 			if(!keepGoing)break;
+
+			#pragma omp barrier // everyone waits here for the single threaded work to be done
+			#pragma omp master
+			{ // the master unlocks what it had locked
+				keepGoing_WriteReadLock.unlock();
+			}
 
 			#pragma omp master
 			{ // emit details of progress
@@ -103,11 +114,14 @@ void Approximator::processImage(QImage orig,int numCircles,int minR,int maxR){
 	}
 	printf("Done Approximating after %d ms\n",timer.elapsed());
 	emit doneProcessing(currentApproximation);
+	keepGoing_WriteReadLock.unlock();
 }
 
 void Approximator::stopProcessing(){
 	if(keepGoing==true){
+		keepGoing_WriteReadLock.lock();
 		keepGoing = false;
+		keepGoing_WriteReadLock.unlock();
 		printf("Stopping Circle Approximator\n");
 	}
 }

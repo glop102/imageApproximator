@@ -17,6 +17,7 @@
 #include "base.h"
 #include <omp.h>
 #include <atomic>
+#include <mutex>
 
 namespace Circle{
 
@@ -39,7 +40,8 @@ private:
 
 	//other stuff
 	QImage origImage;
-	std::atomic<bool> keepGoing;
+	bool keepGoing;
+	std::mutex keepGoing_WriteReadLock;
 	int minRadius;
 	int maxRadius;
 
