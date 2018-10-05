@@ -28,22 +28,17 @@ class Settings;
 class Approximator : public BaseApproximator{
 	Q_OBJECT
 protected:
-	bool stopSignalRecieved;
-	double calculateKernelDivisor(QList<double> kernel);
+	double calculateKernelDivisor(const QList<double> &kernel);
 public:
-	QImage applyKernel(QImage orig, const QList<double> kernel, const bool absolute);
+	Approximator(BaseSettings*);
+	QImage applyKernel(QImage orig, const QList<double> &kernel, const bool &absolute);
 
 	QImage combine_maximum(QList<QImage> images);
 	QImage combine_extreme_channels(QList<QImage> images);
 	QImage combine_extreme_pixels(QList<QImage> images);
 
 public slots:
-	//void processImage(QImage orig, Settings settingsHolder);
-	void processImage(QImage orig, QList<QList<double> > kernels, int numberPasses, bool absolute);
-	void stopProcessing(); // cancels the operation
-signals:
-	void progressMade(QImage,double percentage);
-	void doneProcessing(QImage);
+	void processImage(QImage orig);
 };
 
 class Settings : public BaseSettings{
@@ -52,17 +47,16 @@ public:
 	explicit Settings();
 
 	void addNewKernel(QList<double> kernel = {0,0,0,0,0,0,0,0,0}); // adds to the list a new kernel
+
 	QList<QList<double> > getKernels();
 	int getNumberPasses();
+	bool getIfAbsolute();
 public slots:
 	void numberKernelsChange();
 	void signedUnsignedToggled();
 
-	BaseApproximator* getApproximator(); //returns a valid instance
-	int startApproximator(QImage orig);
-	int stopApproximator();
+	virtual QString getApproximatorName();
 protected:
-	Approximator* localApproximator;
 	QHBoxLayout *globalLayout;
 
 	QGroupBox *quantitySelection;

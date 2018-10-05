@@ -1,7 +1,7 @@
 #include "circleapproximator_deltaselector.h"
 namespace Circle_DeltaSelector {
 
-Approximator::Approximator(){
+Approximator::Approximator(BaseSettings*sett): ::Circle::Approximator(sett){
 	map = new DeltaMap();
 	newMap = new DeltaMap();
 }
@@ -10,247 +10,84 @@ Approximator::~Approximator(){
 	delete newMap;
 }
 
-void Approximator::processImage(QImage orig,int numCircles,int minR,int maxR){
+void Approximator::processImage(QImage orig){
 	printf("starting circle approximation - delta selector\n");
 	QTime timer;
 	timer.start();
+
+	//Some work to be done before getting started
 	origImage = orig.convertToFormat(QImage::Format_ARGB32_Premultiplied); // make sure we know the format
 	keepGoing = true;
-	minRadius = minR;
-	maxRadius = maxR;
-	precomputedDistance.clear(); // array used in the score and draw functions
-	precomputedDistance.reserve(maxRadius+2);
-	for(int z=0; z<maxRadius+2; z++) precomputedDistance.push_back(z*z);
-	initMap(origImage);
 
+	Settings* sett = dynamic_cast<Settings*>(settingsObject);
+	int numCircles = sett->numCircles();
+	minRadius = sett->minRadius();
+	maxRadius = sett->maxRadius();
 	if(minRadius<1) minRadius = 1;
 	if(maxRadius>origImage.width()/2) maxRadius=origImage.width()/2;
 	if(maxRadius>origImage.height()/2) maxRadius=origImage.height()/2;
 	if(minRadius>maxRadius) minRadius = maxRadius;
 
-	newImage = QImage(origImage.width(),origImage.height(),QImage::Format_ARGB32_Premultiplied);
-	newImage.fill(0); // clear the image
+	precomputedDistance.clear(); // array used in the score and draw functions
+	precomputedDistance.reserve(maxRadius+2);
+	for(int z=0; z<maxRadius+2; z++) precomputedDistance.push_back(z*z);
 
-	for(int circle=0; circle<numCircles && keepGoing; circle++){
-		//printf("making a circle\n");
-		//find a circle that helps make things better
-		//currentScore=-1;
-		//while(currentScore<=0){
-		randomSelectCurrentCircle();
-		currentScore = getScore(origImage,newImage,currentColor,curtX,curtY,curtRadius);
-		//map->removePoint(curtX,curtY);
-		updateMap(origImage,curtX,curtY,1,currentColor);
-		//}
-		//printf("optimising a circle\n");
+	currentApproximation = QImage(origImage.width(),origImage.height(),QImage::Format_ARGB32_Premultiplied);
+	currentApproximation.fill(0); // clear the image
+	initMap(origImage);
 
-		nextX=curtX; // assume it will be the best circle
-		nextY=curtY;
-		nextRadius=curtRadius;
-
-		//permutate the circle until optimised
-		int numTests = 0;
-		while(true){
-			numTests++;
-			if(curtX > 0)
-				tryPermutationAndMakeNextIfBetter(curtX-1,curtY,curtRadius);
-			if(curtX < origImage.width())
-				tryPermutationAndMakeNextIfBetter(curtX+1,curtY,curtRadius);
-			if(curtY > 0)
-				tryPermutationAndMakeNextIfBetter(curtX,curtY-1,curtRadius);
-			if(curtY < origImage.height())
-				tryPermutationAndMakeNextIfBetter(curtX,curtY+1,curtRadius);
-			if(curtRadius>minRadius)
-				tryPermutationAndMakeNextIfBetter(curtX,curtY,curtRadius-1);
-			if(curtRadius<maxRadius){
-				tryPermutationAndMakeNextIfBetter(curtX,curtY,curtRadius+1);
-			}
-
-			//if we have already reached a local maxima
-			if(curtX == nextX && curtY == nextY && curtRadius == nextRadius){
-				if(currentScore>=0){
-					//make and save the current best approximation we have - this includes the circle we just found
-					drawCircle(newImage,curtX,curtY,curtRadius,currentColor);
-					updateMap(origImage,curtX,curtY,curtRadius,currentColor);
-				}
-				//newImage = drawCircle(newImage,curtX,curtY,curtRadius,currentColor);
-				break;
-			}else{
-				//we found a new better circle so lets move over to it and try again
-				curtX=nextX;
-				curtY=nextY;
-				curtRadius=nextRadius;
-			}
+	#pragma omp parallel shared(keepGoing)
+	{
+		int num_threads;
+		int circlesPerThread;
+		#pragma omp critical
+		{
+			num_threads = omp_get_num_threads();
+			circlesPerThread = numCircles / num_threads;
+			if(omp_get_thread_num() == num_threads-1)
+				circlesPerThread += numCircles % num_threads; //the last thread gets the left over number of circles
 		}
+		int circle_num = 0;
 
-		if(currentScore>=0){
-			double percentage = (circle+1)/(double)numCircles*100;
-			emit progressMade(newImage,percentage);
+		while(circle_num<circlesPerThread){
+
+			struct Circle circle;
+			do{ //find a circle that helps make things better
+				randomSelectCurrentCircle(&circle);
+				circle.score = getScore(origImage,currentApproximation,
+											   circle.centerX,circle.centerY,circle.radius,circle.color);
+				updateMap(origImage,&circle,1);
+			}while(circle.score<=0);
+
+			//permutate the circle until optimized
+			while(tryPermutationForBetterCircle(&circle));
+
+			drawCircle(currentApproximation,&circle);
+
+			updateMap(origImage,&circle);
+
+			if(!keepGoing)break;
+
+			#pragma omp master
+			{ // emit details of progress
+				double percentage = (circle_num+1)/(double)circlesPerThread*100;
+				emit progressMade(currentApproximation,percentage);
+				QCoreApplication::processEvents();
+			}
+			circle_num++;
 		}
-		QCoreApplication::processEvents();
-		//printf("emited picture %d - r %5d  - pos %5d x %5d - %5d tests - score %5.5f\n",circle,curtRadius,curtX,curtY,numTests,currentScore);
 	}
 	printf("Done Approximating after %d ms\n",timer.elapsed());
-	emit doneProcessing(newImage);
+	emit doneProcessing(currentApproximation);
 }
 
-void Approximator::stopProcessing(){
-	if(keepGoing==true){
-		keepGoing = false;
-		printf("Stopping Circle Approximator\n");
-	}
-}
-
-int Approximator::randRange(int low, int high){
-	int range = high - low;
-	double percentage = (rand()/(double)RAND_MAX);
-	return percentage*range+low;
-}
-
-double Approximator::getScore(QImage &wantedImage, QImage &approximatedImage, QColor color, int centerX,int centerY, int radius){
-	//consider distance = sqrt(x*x + y*y);
-	//if you know distance and y, solving for x terms gives
-	//d*d - y*y = x*x
-	//so since we know radius of the circle and the current height
-	//we can find the max horizontal distance to move
-
-	//it returns a score of how much BETTER the circle will be than the current approximation
-	//so it gets the total difference of the current approximation and the difference the
-	//circle will have if drawn. If the new<current, then we an improvment.
-	//This favors larger circles as a larger circle will potentially cover more area that
-	//is wrong and so has the chance to accrue more improvment
-
-	long long totalApprox=0; // where we store the combined error of the pixels
-	long long totalColor=0;
-
-	int width = wantedImage.width();
-	int minx=centerX-radius;
-	int maxx=centerX+radius;
-	int miny=centerY-radius;
-	int maxy=centerY+radius;
-	if(minx<0) minx=0;
-	if(miny<0) miny=0;
-	if(maxx>=wantedImage.width()) maxx=wantedImage.width()-1;
-	if(maxy>=wantedImage.height()) maxy=wantedImage.height()-1;
-
-	if(maxy<=miny || maxx<=minx) return -10000; //something is not making sense
-
-	int unSqauredRadius = precomputedDistance[radius]; // the max distance from the center anything should go
-	for(int y=miny;y<=maxy;y++){
-		int unSquaredHeight = precomputedDistance[abs(centerY-y)];
-		int maxXDist = unSqauredRadius - unSquaredHeight;
-		int x=1;
-		for(; precomputedDistance[x]<=maxXDist;x++);
-		x--;
-
-		//for(int x=0; precomputedDistance[x]<=maxXDist; x++){
-			int temp;
-			//right side
-			temp = centerX+x;
-			if(temp>=0 && temp<width){
-				QColor c1 = QColor::fromRgba(wantedImage.pixel(temp,y));
-				QColor c2 = QColor::fromRgba(approximatedImage.pixel(temp,y));
-				totalApprox += getColorDelta(c1,c2);
-				totalColor += getColorDelta(c1,color);
-			}
-			//left side
-			temp = centerX-x;
-			if(temp>=0 && temp<width){
-				QColor c1 = QColor::fromRgba(wantedImage.pixel(temp,y));
-				QColor c2 = QColor::fromRgba(approximatedImage.pixel(temp,y));
-				totalApprox += getColorDelta(c1,c2);
-				totalColor += getColorDelta(c1,color);
-			}
-		//}
-	}
-
-	return totalApprox-totalColor;
-}
-
-int Approximator::getColorDelta(QColor c1, QColor c2){
-	int temp,total=0;
-
-	temp = abs(c1.hslHue() - c2.hslHue());
-	total += temp;
-	temp = abs(c1.hslSaturation() - c2.hslSaturation());
-	total += temp;
-	temp = abs(c1.lightness() - c2.lightness());
-	total += temp;
-	temp = abs(c1.alpha() - c2.alpha());
-	total += temp;
-
-	return total;
-}
-
-void Approximator::drawCircle(QImage &image, int centerX, int centerY, int radius, QColor color){
-	//consider distance = sqrt(x*x + y*y);
-	//if you know distance and y, solving for x terms gives
-	//d*d - y*y = x*x
-	//so since we know radius of the circle and the current height
-	//we can find the max horizontal distance to move
-
-	//it starts from the top of the circle and goes down
-	//for every row, it starts from the middle and moves outwards
-
-	//QImage image = oldImage;
-	uchar *bits = image.bits(); // faster to directly modify bytes - the setPixel method is slow
-	int width = image.width();
-	int height = image.height();
-	int unSqrtedDistance = precomputedDistance[radius]; // the max distance from the center anything should go
-
-	int yStartingNum = centerY-radius; // start at the top of the circle
-	if(yStartingNum<0) yStartingNum=0; // dont start outside the image
-
-	for(int y=yStartingNum; y<=centerY+radius && y<height; y++){
-		int lineOffset = y*width*4;
-		int unSqrtedHeight = precomputedDistance[abs(centerY-y)];
-		int maxXDist = unSqrtedDistance - unSqrtedHeight;
-		for(int x=0; precomputedDistance[x]<=maxXDist; x++){
-			int pixelOffset;
-			int temp;
-			//right side
-			temp = centerX+x;
-			if(temp<width){
-				pixelOffset = lineOffset + (temp*4);
-				bits[pixelOffset + 0] = color.blue();
-				bits[pixelOffset + 1] = color.green();
-				bits[pixelOffset + 2] = color.red();
-				bits[pixelOffset + 3] = color.alpha();
-			}
-			//left side
-			temp = centerX-x;
-			if(temp >= 0){
-				pixelOffset = lineOffset + (temp*4);
-				bits[pixelOffset + 0] = color.blue();
-				bits[pixelOffset + 1] = color.green();
-				bits[pixelOffset + 2] = color.red();
-				bits[pixelOffset + 3] = color.alpha();
-			}
-		}
-	}
-	//return image;
-}
-
-void Approximator::randomSelectCurrentCircle(){
-//	curtX=randRange(0,origImage.width()-1);
-//	curtY=randRange(0,origImage.height()-1);
+void Approximator::randomSelectCurrentCircle(struct Circle* circle){
 	uint32_t x,y;
 	map->getHighDeltaPoint(x,y);
-	curtX = x;
-	curtY = y;
-	curtRadius = minRadius;
-	currentColor = QColor::fromRgba(origImage.pixel(curtX,curtY));
-}
-
-bool Approximator::tryPermutationAndMakeNextIfBetter(int x, int y, int radius){
-	double score = getScore(origImage,newImage,currentColor,x,y,radius);
-	if(score>currentScore){
-		currentScore = score;
-		nextX=x;
-		nextY=y;
-		nextRadius=radius;
-		return true;
-	}else
-		return false;
+	circle->centerX = x;
+	circle->centerY = y;
+	circle->radius = minRadius;
+	circle->color = QColor::fromRgba(origImage.pixel(x,y));
 }
 
 void Approximator::initMap(QImage &image){
@@ -267,53 +104,66 @@ void Approximator::initMap(QImage &image){
 			double delta = getColorDelta(c1,c2);
 			map->setPointDelta(x,y,delta);
 		}
+		emit progressMade(currentApproximation,
+						  ( (image.height()-y)/(double )image.height() ) * 100.0
+						  );
 	}
 }
-void Approximator::updateMap(QImage &wantedImage, int centerX, int centerY, int radius,QColor color){
+void Approximator::updateMap(QImage &wantedImage, struct Circle* circle, int radius_override){
 	int width = wantedImage.width();
-	int minx=centerX-radius;
-	int maxx=centerX+radius;
-	int miny=centerY-radius;
-	int maxy=centerY+radius;
+	int minx=circle->centerX - circle->radius;
+	int maxx=circle->centerX + circle->radius;
+	int miny=circle->centerY - circle->radius;
+	int maxy=circle->centerY + circle->radius;
 	if(minx<0) minx=0;
 	if(miny<0) miny=0;
-	if(maxx>=wantedImage.width()) maxx=wantedImage.width()-1;
-	if(maxy>=wantedImage.height()) maxy=wantedImage.height()-1;
 
-	if(maxy<=miny || maxx<=minx) return; //something is not making sense
+	int unSqauredRadius;
+	if(radius_override)
+		unSqauredRadius = precomputedDistance[radius_override];
+	else
+		unSqauredRadius = precomputedDistance[circle->radius]; // the max distance from the center anything should go
 
-	int unSqauredRadius = precomputedDistance[radius]; // the max distance from the center anything should go
-	for(int y=miny;y<=maxy;y++){
-		int unSquaredHeight = precomputedDistance[abs(centerY-y)];
-		int maxXDist = unSqauredRadius - unSquaredHeight;
-		for(int x=0; precomputedDistance[x]<=maxXDist;++x){
-			int temp;
-			double delta;
-			//right side
-			temp = centerX+x;
-			if(temp>=0 && temp<width){
-				QColor c1 = QColor::fromRgba(wantedImage.pixel(temp,y));
-				delta = getColorDelta(c1,color);
-				if(delta>0)
-					newMap->setPointDelta(temp,y,delta);
-				map->removePoint(temp,y);
-			}
-			//left side
-			temp = centerX-x;
-			if(temp>=0 && temp<width){
-				QColor c1 = QColor::fromRgba(wantedImage.pixel(temp,y));
-				delta = getColorDelta(c1,color);
-				if(delta>0)
-					newMap->setPointDelta(temp,y,delta);
-				map->removePoint(temp,y);
+	#pragma omp critical
+	{
+		if(maxx>=wantedImage.width()) maxx=wantedImage.width()-1;
+		if(maxy>=wantedImage.height()) maxy=wantedImage.height()-1;
+		if(maxy<=miny || maxx<=minx) goto skip_map_update; //something is not making sense
+
+		for(int y=miny;y<=maxy;y++){
+			int unSquaredHeight = precomputedDistance[abs(circle->centerY-y)];
+			int maxXDist = unSqauredRadius - unSquaredHeight;
+			for(int x=0; precomputedDistance[x]<=maxXDist;++x){
+				int temp;
+				double delta;
+				//right side
+				temp = circle->centerX+x;
+				if(temp>=0 && temp<width){
+					QColor c1 = QColor::fromRgba(wantedImage.pixel(temp,y));
+					delta = getColorDelta(c1,circle->color);
+					if(delta>0)
+						newMap->setPointDelta(temp,y,delta);
+					map->removePoint(temp,y);
+				}
+				//left side
+				temp = circle->centerX-x;
+				if(temp>=0 && temp<width){
+					QColor c1 = QColor::fromRgba(wantedImage.pixel(temp,y));
+					delta = getColorDelta(c1,circle->color);
+					if(delta>0)
+						newMap->setPointDelta(temp,y,delta);
+					map->removePoint(temp,y);
+				}
 			}
 		}
-	}
 
-	if(map->numPoints()==0){
-		delete map;
-		map = newMap;
-		newMap = new DeltaMap();
+		if(map->numPoints()==0){
+			printf("Ran through all points, flipping map\n");
+			delete map;
+			map = newMap;
+			newMap = new DeltaMap();
+		}
+		skip_map_update:;
 	}
 }
 
@@ -455,12 +305,13 @@ long long DeltaMap::numPoints(){
 //=====================================================================================================================================================
 //=====================================================================================================================================================
 
-Settings::Settings(){
+Settings::Settings() : BaseSettings(){
+	localApproximator = dynamic_cast<BaseApproximator*>(new Approximator(this));
 	makeWidgets();
 	layoutWidgets();
 	makeConnections();
-	localApproximator = new Approximator;
 }
+
 void Settings::keepRadiusEntriesInSync(){
 	QObject *sender = QObject::sender();
 	int min = minRadiusEntry->value();
@@ -483,21 +334,6 @@ int Settings::minRadius(){
 }
 int Settings::maxRadius(){
 	return maxRadiusEntry->value();
-}
-BaseApproximator* Settings::getApproximator(){
-	return localApproximator;
-}
-int Settings::startApproximator(QImage orig){
-	return
-	QMetaObject::invokeMethod(localApproximator,"processImage",
-							  Q_ARG(QImage,orig),
-							  Q_ARG(int,numCircles()),
-							  Q_ARG(int,minRadius()),
-							  Q_ARG(int,maxRadius())
-							  );
-}
-int Settings::stopApproximator(){
-	return QMetaObject::invokeMethod(localApproximator,"stopProcessing");
 }
 
 void Settings::makeWidgets(){
@@ -531,6 +367,10 @@ void Settings::layoutWidgets(){
 void Settings::makeConnections(){
 	connect(minRadiusEntry,SIGNAL(valueChanged(int)),this,SLOT(keepRadiusEntriesInSync()) );
 	connect(maxRadiusEntry,SIGNAL(valueChanged(int)),this,SLOT(keepRadiusEntriesInSync()) );
+}
+
+QString Settings::getApproximatorName(){
+	return "Circle-Delta";
 }
 
 } //namespace

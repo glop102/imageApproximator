@@ -4,7 +4,7 @@ namespace Kernel{
 // MAKE FASTER WITH DIRECT BYTE ACCESS
 // orig.bits()
 // orig.bytesPerLine()
-QImage Approximator::applyKernel(QImage orig, const QList<double> kernel, const bool absolute){
+QImage Approximator::applyKernel(QImage orig, const QList<double> &kernel, const bool &absolute){
 	QImage dest(orig.width(),orig.height(),orig.format());
 	dest.fill(Qt::black);
 	double divisor = calculateKernelDivisor(kernel);
@@ -48,13 +48,18 @@ QImage Approximator::applyKernel(QImage orig, const QList<double> kernel, const 
 	return dest;
 }
 
-void Approximator::processImage(QImage orig, QList<QList<double> > kernels, int numPasses, bool absolute){
+void Approximator::processImage(QImage orig){
 	printf("starting kernel approximator\n");
 	QElapsedTimer timer;
 	timer.start();
 
+	Settings* sett = dynamic_cast<Settings*>(settingsObject);
+	QList<QList<double> > kernels = sett->getKernels();
+	int numPasses = sett->getNumberPasses();
+	bool absolute = sett->getIfAbsolute();
+
 	orig = orig.convertToFormat(QImage::Format_ARGB32_Premultiplied); // make sure we know the format
-	stopSignalRecieved = false;
+	keepGoing = true;
 	double progress_step =  // how much each step is worth percentage wise
 			100.0 / ( //100% divided by number of steps
 			(kernels.length()+1) // steps per loop (kernels + combine)
@@ -70,7 +75,7 @@ void Approximator::processImage(QImage orig, QList<QList<double> > kernels, int 
 			images.append(temp);
 
 			QCoreApplication::processEvents();
-			if(stopSignalRecieved){
+			if(!keepGoing){
 				emit doneProcessing(orig);
 				return;
 			}
@@ -93,14 +98,7 @@ void Approximator::processImage(QImage orig, QList<QList<double> > kernels, int 
 
 }
 
-void Approximator::stopProcessing(){
-	if(stopSignalRecieved==false){
-		stopSignalRecieved = true;
-		printf("Stopping Kernel Approximator\n");
-	}
-}
-
-double Approximator::calculateKernelDivisor(QList<double> kernel){
+double Approximator::calculateKernelDivisor(const QList<double> &kernel){
 	//got from here - https://stackoverflow.com/questions/40444560/opencvs-sobel-filter-why-does-it-look-so-bad-especially-compared-to-gimp
 	double neg=0,pos=0;
 	for(auto x : kernel){
@@ -190,6 +188,8 @@ QImage Approximator::combine_extreme_pixels(QList<QImage> images){
 	return combined;
 }
 
+Approximator::Approximator(BaseSettings *sett):BaseApproximator(sett){}
+
 //=====================================================================================================================================================
 //=====================================================================================================================================================
 //		Settings Class Below
@@ -197,7 +197,7 @@ QImage Approximator::combine_extreme_pixels(QList<QImage> images){
 //=====================================================================================================================================================
 
 Settings::Settings(){
-	localApproximator = new Approximator;
+	localApproximator = dynamic_cast<BaseApproximator*>(new Approximator(this));
 
 	// === Left Group - Various numerical options
 	quantitySelection = new QGroupBox;
@@ -323,28 +323,20 @@ int Settings::getNumberPasses(){
 	return numberPasses->value();
 }
 
-BaseApproximator* Settings::getApproximator(){
-	return localApproximator;
+bool Settings::getIfAbsolute(){
+	return ! signedUnsignedToggle->isChecked();
 }
-int Settings::startApproximator(QImage orig){
-	qRegisterMetaType<QList<QList<double> > >("QList<QList<double> >");
-	return
-	QMetaObject::invokeMethod(localApproximator,"processImage",
-							  Q_ARG(QImage,orig),
-							  Q_ARG(QList<QList<double> >, getKernels()),
-							  Q_ARG(int,getNumberPasses()),
-							  Q_ARG(bool,! signedUnsignedToggle->isChecked())
-							  );
-}
-int Settings::stopApproximator(){
-	return QMetaObject::invokeMethod(localApproximator,"stopProcessing");
-}
+
 void Settings::signedUnsignedToggled(){
 	if(signedUnsignedToggle->isChecked()){
 		signedUnsignedToggle->setText("Signed");
 	}else{
 		signedUnsignedToggle->setText("Absolute");
 	}
+}
+
+QString Settings::getApproximatorName(){
+	return "Edge";
 }
 
 }//namespace

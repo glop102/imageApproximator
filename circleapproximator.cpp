@@ -1,7 +1,7 @@
 #include "circleapproximator.h"
 namespace Circle{
 
-void Approximator::processImage(QImage orig,int numCircles,int minR,int maxR){
+void Approximator::processImage(QImage orig){
 	printf("starting circle approximation - random selector\n");
 	QTime timer;
 	timer.start();
@@ -9,61 +9,29 @@ void Approximator::processImage(QImage orig,int numCircles,int minR,int maxR){
 	//Some work to be done before getting started
 	origImage = orig.convertToFormat(QImage::Format_ARGB32_Premultiplied); // make sure we know the format
 	keepGoing = true;
-	minRadius = minR;
-	maxRadius = maxR;
-	precomputedDistance.clear(); // array used in the score and draw functions
-	precomputedDistance.reserve(maxRadius+2);
-	for(int z=0; z<maxRadius+2; z++) precomputedDistance.push_back(z*z);
 
+	Settings* sett = dynamic_cast<Settings*>(settingsObject);
+	int numCircles = sett->numCircles();
+	minRadius = sett->minRadius();
+	maxRadius = sett->maxRadius();
 	if(minRadius<1) minRadius = 1;
 	if(maxRadius>origImage.width()/2) maxRadius=origImage.width()/2;
 	if(maxRadius>origImage.height()/2) maxRadius=origImage.height()/2;
 	if(minRadius>maxRadius) minRadius = maxRadius;
 
+	precomputedDistance.clear(); // array used in the score and draw functions
+	precomputedDistance.reserve(maxRadius+2);
+	for(int z=0; z<maxRadius+2; z++) precomputedDistance.push_back(z*z);
+
 	currentApproximation = QImage(origImage.width(),origImage.height(),QImage::Format_ARGB32_Premultiplied);
 	currentApproximation.fill(0); // clear the image
 
-//	#pragma omp parallel for schedule(dynamic)
-//	for(int circle_num=0; circle_num<numCircles; circle_num++){
-//		//if(!keepGoing) break;
-
-//		struct Circle circle;
-//		//find a circle that helps make things better
-//		do{
-//			randomSelectCurrentCircle(&circle);
-//			circle.score = getScore(origImage,currentApproximation,
-//										   circle.centerX,circle.centerY,circle.radius,circle.color);
-//		}while(circle.score<=0);
-
-//		//printf("optimising a circle\n");
-//		//permutate the circle until optimized
-//		while(true){
-//			bool found_better = tryPermutationForBetterCircle(&circle);
-//			//if we have already reached a local maxima
-//			if(! found_better)
-//				break;
-//		}
-//		//#pragma omp barrier
-//		#pragma omp critical
-//		drawCircle(currentApproximation,&circle);
-//		//#pragma omp barrier
-
-//		//#pragma omp single
-//		{
-//			double percentage = (circle_num+1)/(double)numCircles*100;
-//			emit progressMade(currentApproximation,percentage);
-//			QCoreApplication::processEvents();
-//		}
-//		//printf("emited picture %d - r %5d  - pos %5d x %5d - %5d tests - delta %5.5f\n",circle,curtRadius,curtX,curtY,numTests,currentDelta);
-//	}
-
 	#pragma omp parallel shared(keepGoing)
 	{
-		int num_threads;
 		int circlesPerThread;
 		#pragma omp critical
 		{
-			num_threads = omp_get_num_threads();
+			int num_threads = omp_get_num_threads();
 			circlesPerThread = numCircles / num_threads;
 			if(omp_get_thread_num() == num_threads-1)
 				circlesPerThread += numCircles % num_threads; //the last thread gets the left over number of circles
@@ -80,28 +48,11 @@ void Approximator::processImage(QImage orig,int numCircles,int minR,int maxR){
 			}while(circle.score<=0);
 
 			//permutate the circle until optimized
-			while(true){
-				bool found_better = tryPermutationForBetterCircle(&circle);
-				if(! found_better)
-					break;
-			}
+			while(tryPermutationForBetterCircle(&circle));
 
-			#pragma omp master
-			{ // master takes out locks for the critical section below to keep values from changing
-				keepGoing_WriteReadLock.lock();
-			}
-			#pragma omp barrier // when master gets here, we know all write locks are in place
-			#pragma omp critical
-			{ // these are things that are not thread-safe
-				drawCircle(currentApproximation,&circle);
-			}
+			drawCircle(currentApproximation,&circle);
+
 			if(!keepGoing)break;
-
-			#pragma omp barrier // everyone waits here for the single threaded work to be done
-			#pragma omp master
-			{ // the master unlocks what it had locked
-				keepGoing_WriteReadLock.unlock();
-			}
 
 			#pragma omp master
 			{ // emit details of progress
@@ -114,17 +65,9 @@ void Approximator::processImage(QImage orig,int numCircles,int minR,int maxR){
 	}
 	printf("Done Approximating after %d ms\n",timer.elapsed());
 	emit doneProcessing(currentApproximation);
-	keepGoing_WriteReadLock.unlock();
 }
 
-void Approximator::stopProcessing(){
-	if(keepGoing==true){
-		keepGoing_WriteReadLock.lock();
-		keepGoing = false;
-		keepGoing_WriteReadLock.unlock();
-		printf("Stopping Circle Approximator\n");
-	}
-}
+Approximator::Approximator(BaseSettings *sett):BaseApproximator(sett){}
 
 int Approximator::randRange(int low, int high){
 	int range = high - low;
@@ -225,16 +168,21 @@ void Approximator::drawCircle(QImage &image, struct Circle * circle){
 	//for every row, it starts from the middle and moves outwards
 	//This is used because it is faster the the QPainter drawing the circle
 
-	int centerX = circle->centerX;
-	int centerY = circle->centerY;
-	int radius = circle->radius;
-	QColor color = circle->color;
+	int &centerX = circle->centerX;
+	int &centerY = circle->centerY;
+	int &radius = circle->radius;
+	QColor &color = circle->color;
 
-	//QImage image = oldImage;
-	uchar *bits = image.bits(); // faster to directly modify bytes - the setPixel method is slow
-	int width = image.width();
-	int height = image.height();
-	int unSqrtedDistance = precomputedDistance[radius]; // the max distance from the center anything should go
+	int width;
+	int height;
+	uchar *bits;// faster to directly modify bytes - the setPixel method is slow
+	#pragma omp critical
+	{
+		width = image.width();
+		height = image.height();
+		bits = image.bits(); // faster to directly modify bytes - the setPixel method is slow
+	}
+	int &unSqrtedDistance = precomputedDistance[radius]; // the max distance from the center anything should go
 
 	int yStartingNum = centerY-radius; // start at the top of the circle
 	if(yStartingNum<0) yStartingNum=0; // dont start outside the image
@@ -266,7 +214,6 @@ void Approximator::drawCircle(QImage &image, struct Circle * circle){
 			}
 		}
 	}
-	//return image;
 }
 
 void Approximator::randomSelectCurrentCircle(struct Circle * circle){
@@ -321,11 +268,11 @@ bool Approximator::tryPermutationForBetterCircle(struct Circle *circle){
 //======================================================================================================================================
 //======================================================================================================================================
 
-Settings::Settings(){
+Settings::Settings():BaseSettings(){
+	localApproximator = dynamic_cast<BaseApproximator*>(new Approximator(this));
 	makeWidgets();
 	layoutWidgets();
 	makeConnections();
-	localApproximator = new Approximator;
 }
 
 void Settings::keepRadiusEntriesInSync(){
@@ -352,20 +299,8 @@ int Settings::maxRadius(){
 	return maxRadiusEntry->value();
 }
 
-BaseApproximator* Settings::getApproximator(){
-	return localApproximator;
-}
-int Settings::startApproximator(QImage orig){
-	return
-	QMetaObject::invokeMethod(localApproximator,"processImage",
-							  Q_ARG(QImage,orig),
-							  Q_ARG(int,numCircles()),
-							  Q_ARG(int,minRadius()),
-							  Q_ARG(int,maxRadius())
-							  );
-}
-int Settings::stopApproximator(){
-	return QMetaObject::invokeMethod(localApproximator,"stopProcessing");
+QString Settings::getApproximatorName(){
+	return "Circle-Random";
 }
 
 void Settings::makeWidgets(){

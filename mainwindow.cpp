@@ -1,52 +1,21 @@
 #include "mainwindow.h"
 
-/*
- * ADDING A NEW APPROXIMATOR
- * fast reference, look at addApproximators() and destructor
- *
- * you need two objects
- * - settings for the approximator
- * - the approximator itself
- *
- * settings - inherits from BaseSettings
- * - add to the settingsMenu widget in addApproximators()
- *
- * approximator - inherits from BaseApproximator
- * - move instance to worker thread
- * - have a slot processImage(QImage) that takes an image
- * - have a slot stopProcessing() to stop early
- *	 - simplest to have set a bool and then in the loop after processEvents, check if bool changed
- *   - note: when exiting early, make sure to emit doneProcessing(QImage) to reset the GUI
- * - have a signal progressMade(QImage,double) method to give a progress of a percentage
- *   - connect to updateProgress(QImage,double)
- * - have a signal doneProcessing(QImage) returning the final image
- *   - connect to finalImageApproximation(QImage)
- */
-
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
+	settingsObjects.push_back(new Circle::Settings() );
+	settingsObjects.push_back(new Circle_DeltaSelector::Settings() );
+	settingsObjects.push_back(new Kernel::Settings() );
 	constructGUI();
 	addApproximators();
 }
 
 void MainWindow::addApproximators(){
-	settingsMenu->addTab(&circleSettings,"Circle-Random");
-	settingsMenu->addTab(&circleSettings2,"Circle-Stable");
-	settingsMenu->addTab(&edgeSettings,"Edge Detector");
-	//settingsMenu->addTab(&keypointSettings,"Keypoints");
+	for(auto sett : settingsObjects){
+		settingsMenu->addTab(sett,sett->getApproximatorName());
+		connect(sett->getApproximator(),SIGNAL(progressMade(QImage,double)),this,SLOT(updateProgress(QImage,double)) );
+		connect(sett->getApproximator(),SIGNAL(doneProcessing(QImage)),this,SLOT(finalImageApproximation(QImage)) );
 
-	connect(circleSettings.getApproximator(),SIGNAL(progressMade(QImage,double)),this,SLOT(updateProgress(QImage,double)) );
-	connect(circleSettings.getApproximator(),SIGNAL(doneProcessing(QImage)),this,SLOT(finalImageApproximation(QImage)) );
-	connect(circleSettings2.getApproximator(),SIGNAL(progressMade(QImage,double)),this,SLOT(updateProgress(QImage,double)) );
-	connect(circleSettings2.getApproximator(),SIGNAL(doneProcessing(QImage)),this,SLOT(finalImageApproximation(QImage)) );
-	connect(edgeSettings.getApproximator(),SIGNAL(progressMade(QImage,double)),this,SLOT(updateProgress(QImage,double)) );
-	connect(edgeSettings.getApproximator(),SIGNAL(doneProcessing(QImage)),this,SLOT(finalImageApproximation(QImage)) );
-	connect(keypointSettings.getApproximator(),SIGNAL(progressMade(QImage,double)),this,SLOT(updateProgress(QImage,double)) );
-	connect(keypointSettings.getApproximator(),SIGNAL(doneProcessing(QImage)),this,SLOT(finalImageApproximation(QImage)) );
-
-	circleSettings.getApproximator()->moveToThread(&workerThread);
-	circleSettings2.getApproximator()->moveToThread(&workerThread);
-	edgeSettings.getApproximator()->moveToThread(&workerThread);
-	keypointSettings.getApproximator()->moveToThread(&workerThread);
+		sett->getApproximator()->moveToThread(&workerThread);
+	}
 	workerThread.start();
 }
 void MainWindow::constructGUI(){
@@ -54,7 +23,7 @@ void MainWindow::constructGUI(){
 	setCentralWidget( new QWidget() );
 	centralWidget()->setLayout(mainLayout);
 
-	//imageLocationLabel = new QLabel("/media/RAID/Documents/Pictures/tumblr/9cRJB3e.png");
+	//imageLocationLabel = new QLabel("/media/RAID/Documents/Pictures/tumblr/9cRJB3e.png");	//misato room service
 	imageLocationLabel = new QLabel("/media/RAID/Documents/Pictures/Wallpapers/phlshu.png");
 	imageLocationButton = new QPushButton("Select Image");
 	saveButton = new QPushButton("Save");
@@ -62,7 +31,7 @@ void MainWindow::constructGUI(){
 	imageDisplay = new ImageLabel();
 	progressBar = new QProgressBar();
 
-	progressBar->setRange(0,1000000);
+	progressBar->setRange(0,1000000); // big number gives lots of granularity
 
 	QHBoxLayout *topRow = new QHBoxLayout();
 	mainLayout->addLayout(topRow,0,0);
@@ -88,12 +57,13 @@ void MainWindow::constructGUI(){
 }
 
 MainWindow::~MainWindow(){
-	circleSettings.stopApproximator();
-	circleSettings2.stopApproximator();
-	edgeSettings.stopApproximator();
-	keypointSettings.stopApproximator();
+	for(auto sett : settingsObjects)
+		sett->stopApproximator();
 	workerThread.quit();
 	workerThread.wait();
+
+	for(auto sett : settingsObjects)
+		delete sett;
 }
 
 void MainWindow::selectImage(){

@@ -15,7 +15,9 @@
 #include <QGridLayout>
 #include <QSpinBox>
 #include <QLabel>
+#include <atomic>
 #include "base.h"
+#include "circleapproximator.h"
 
 namespace Circle_DeltaSelector{
 
@@ -65,6 +67,12 @@ public:
 	long long numPoints(); // how many points are stored in this structure
 };
 
+struct Circle{
+	int centerX=0,centerY=0;
+	int radius=0;
+	QColor color;
+	double score=0; // amount of change between modified image and original image
+};
 
 /*
  * This circle approximator is a little bit more complicated. It goes after the pixel that has the most delta first.
@@ -76,46 +84,22 @@ public:
  *  -- the second map is what new delta values are and will be used to iterate on the next pass
  *  -- the first map is deleted since it does not have anything in it
  */
-class Approximator : public BaseApproximator{
+class Approximator : public ::Circle::Approximator{
 	Q_OBJECT
-	// temp vars for use in the processImage method - we save them externally so that i can call a method to do some work and not copy/paste the same thing 6 times
-	int curtX,nextX;
-	int curtY,nextY;
-	int curtRadius,nextRadius;
-	QColor currentColor;
-	QImage newImage;
-	double currentScore; // amount of change between modified image and original image
-	vector<int> precomputedDistance;
-
-	//other stuff
-	QImage origImage;
-	bool keepGoing;
-	int minRadius;
-	int maxRadius;
-
-	int randRange(int low,int high); // warning - is inclusive of the high number
-	double getScore(QImage &firstImage, QImage &secondImage, QColor color, int x,int y, int radius);
-	int getColorDelta(QColor c1, QColor c2);
-	void drawCircle(QImage &image,int x, int y, int radius, QColor color);
-	void randomSelectCurrentCircle();
-	bool tryPermutationAndMakeNextIfBetter(int x, int y, int radius);
+protected:
 
 	DeltaMap *map; // the current map we use to get points from
 	DeltaMap *newMap; // the new map that will be used when we have exasted the current map
 	void initMap(QImage &image);
-	void updateMap(QImage &wantedImage, int centerX,int centerY,int radius,QColor color);
+	void updateMap(QImage &wantedImage, struct Circle* circle, int radius_override = 0);
+	void randomSelectCurrentCircle(struct Circle*);
 public:
-	Approximator();
+	Approximator(BaseSettings*);
 	~Approximator();
 public slots:
-	//void processImage(QImage orig, Settings settings);
-	void processImage(QImage orig, int numCircles, int minRadius, int maxRadius);
-	void stopProcessing(); // cancels the operation
-signals:
-	void progressMade(QImage,double percentage);
-	void doneProcessing(QImage);
-
+	void processImage(QImage orig);
 };
+
 
 class Settings : public BaseSettings{
 	Q_OBJECT
@@ -126,17 +110,15 @@ public:
 	int maxRadius();
 public slots:
 	void keepRadiusEntriesInSync();
-	BaseApproximator* getApproximator(); //returns a valid instance
-	int startApproximator(QImage orig);
-	int stopApproximator();
+	QString getApproximatorName();
 protected:
-	Approximator* localApproximator;
 	QGridLayout *mainLayout;
 	QLabel *description;
 	QSpinBox *numCirclesEntry,*minRadiusEntry,*maxRadiusEntry;
-	void makeWidgets();
-	void layoutWidgets();
-	void makeConnections();
+protected:
+	virtual void makeWidgets();
+	virtual void layoutWidgets();
+	virtual void makeConnections();
 };
 
 } //namespace

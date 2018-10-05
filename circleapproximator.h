@@ -23,11 +23,14 @@ namespace Circle{
 
 using std::vector;
 class Settings;
+class Approximator;
+
+//================================================================
+//================================================================
 
 class Approximator : public BaseApproximator{
 	Q_OBJECT
-private:
-	// temp vars for use in the processImage method - we save them externally so that i can call a method to do some work and not copy/paste the same thing 6 times
+protected:
 	struct Circle{
 		int centerX=0,centerY=0;
 		int radius=0;
@@ -38,10 +41,7 @@ private:
 	vector<int> precomputedDistance;
 	QImage currentApproximation;
 
-	//other stuff
 	QImage origImage;
-	bool keepGoing;
-	std::mutex keepGoing_WriteReadLock;
 	int minRadius;
 	int maxRadius;
 
@@ -52,13 +52,14 @@ private:
 	void randomSelectCurrentCircle(struct Circle *);
 	bool tryPermutationForBetterCircle(struct Circle *);
 
+public:
+	Approximator(BaseSettings*);
 public slots:
-	void processImage(QImage orig, int numCircles, int minRadius, int maxRadius);
-	void stopProcessing(); // cancels the operation
-signals:
-	void progressMade(QImage,double percentage);
-	void doneProcessing(QImage);
+	virtual void processImage(QImage orig);
 };
+
+//================================================================
+//================================================================
 
 class Settings : public BaseSettings{
 	Q_OBJECT
@@ -69,17 +70,14 @@ public:
 	int maxRadius();
 public slots:
 	void keepRadiusEntriesInSync();
-	BaseApproximator* getApproximator(); //returns a valid instance
-	int startApproximator(QImage orig);
-	int stopApproximator();
+	QString getApproximatorName();
 protected:
-	Approximator* localApproximator;
 	QGridLayout *mainLayout;
 	QLabel *description;
 	QSpinBox *numCirclesEntry,*minRadiusEntry,*maxRadiusEntry;
-	void makeWidgets();
-	void layoutWidgets();
-	void makeConnections();
+	virtual void makeWidgets();
+	virtual void layoutWidgets();
+	virtual void makeConnections();
 };
 
 } //namespace

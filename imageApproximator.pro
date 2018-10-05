@@ -29,18 +29,20 @@ LIBS += -fopenmp
 SOURCES += \
         main.cpp \
         mainwindow.cpp \
-    circleapproximator.cpp \
+    base.cpp \
     imagelabel.cpp \
+\  # approximators
+    circleapproximator.cpp \
     circleapproximator_deltaselector.cpp \
     kernelapproximator.cpp \
-    base.cpp \
-    keypoint.cpp
+#    keypoint.cpp
 
 HEADERS += \
         mainwindow.h \
-    circleapproximator.h \
+    base.h \
     imagelabel.h \
+\ # approximators
+    circleapproximator.h \
     circleapproximator_deltaselector.h \
     kernelapproximator.h \
-    base.h \
-    keypoint.h
+#    keypoint.h

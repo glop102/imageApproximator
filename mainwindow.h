@@ -1,6 +1,15 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
+/*
+ * ADDING A NEW APPROXIMATOR
+ * you need two objects
+ * - settings for the approximator
+ * - the approximator itself
+ * add your settings object to the constructor
+ * add your files to the .pro file
+ */
+
 #include <QMainWindow>
 #include <QLabel>
 #include <QImage>
@@ -14,11 +23,12 @@
 #include <QProgressBar>
 
 #include <QThread>
+#include "imagelabel.h"
+
 #include "circleapproximator.h"
 #include "circleapproximator_deltaselector.h"
-#include "imagelabel.h"
 #include "kernelapproximator.h"
-#include "keypoint.h"
+//#include "keypoint.h"
 
 class MainWindow : public QMainWindow{
 	Q_OBJECT
@@ -49,10 +59,7 @@ private:
 	QProgressBar *progressBar;
 
 	QTabWidget *settingsMenu;
-	Circle::Settings circleSettings;
-	Circle_DeltaSelector::Settings circleSettings2;
-	Kernel::Settings edgeSettings;
-	Keypoint::Settings keypointSettings;
+	std::vector<BaseSettings*> settingsObjects;
 
 	QImage displayedImage;
 
