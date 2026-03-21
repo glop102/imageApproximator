@@ -21,6 +21,14 @@
         inherit (self.legacyPackages.${system})
           imageApproximator
           ;
+        default = self.legacyPackages.${system}.imageApproximator;
+      });
+      apps = forAllSystems (system: {
+        imageApproximator = {
+          type = "app";
+          program = "${self.legacyPackages.${system}.imageApproximator}/bin/imageApproximator";
+        };
+        default = self.apps.${system}.imageApproximator;
       });
     };
 }
