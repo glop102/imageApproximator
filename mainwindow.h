@@ -29,6 +29,7 @@
 #include "circleapproximator_deltaselector.h"
 #include "kernelapproximator.h"
 //#include "keypoint.h"
+#include "glitch.h"
 
 class MainWindow : public QMainWindow{
 	Q_OBJECT

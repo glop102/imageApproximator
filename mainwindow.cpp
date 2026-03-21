@@ -4,6 +4,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent){
 	settingsObjects.push_back(new Circle::Settings() );
 	settingsObjects.push_back(new Circle_DeltaSelector::Settings() );
 	settingsObjects.push_back(new Kernel::Settings() );
+	settingsObjects.push_back(new Glitch::Settings() );
 	constructGUI();
 	addApproximators();
 }

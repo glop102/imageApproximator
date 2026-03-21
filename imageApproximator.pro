@@ -35,7 +35,9 @@ SOURCES += \
     circleapproximator.cpp \
     circleapproximator_deltaselector.cpp \
     kernelapproximator.cpp \
+	glitch.cpp \
 #    keypoint.cpp
+    keypoints.cpp
 
 HEADERS += \
         mainwindow.h \
@@ -45,4 +47,6 @@ HEADERS += \
     circleapproximator.h \
     circleapproximator_deltaselector.h \
     kernelapproximator.h \
+	glitch.h \
 #    keypoint.h
+    keypoints.h
