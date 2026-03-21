@@ -4,7 +4,7 @@
 #include <QObject>
 #include <QImage>
 #include <QColor>
-#include <QTime>
+#include <QElapsedTimer>
 #include <QCoreApplication>
 #include <vector>
 #include <map>

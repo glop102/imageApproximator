@@ -8,7 +8,7 @@
 #include <stdio.h>
 #include <vector>
 #include <math.h>
-#include <QTime>
+#include <QElapsedTimer>
 #include <random>
 #include <QWidget>
 #include <QGridLayout>

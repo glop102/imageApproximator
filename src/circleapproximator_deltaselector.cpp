@@ -12,7 +12,7 @@ Approximator::~Approximator(){
 
 void Approximator::processImage(QImage orig){
 	printf("starting circle approximation - delta selector\n");
-	QTime timer;
+	QElapsedTimer timer;
 	timer.start();
 
 	//Some work to be done before getting started
@@ -77,7 +77,7 @@ void Approximator::processImage(QImage orig){
 			circle_num++;
 		}
 	}
-	printf("Done Approximating after %d ms\n",timer.elapsed());
+	printf("Done Approximating after %lld ms\n",(long long)timer.elapsed());
 	emit doneProcessing(currentApproximation);
 }
 

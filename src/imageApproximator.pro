@@ -47,3 +47,6 @@ HEADERS += \
 	glitch.h \
 #    keypoint.h
     keypoints.h
+
+target.path = $$PREFIX/bin
+INSTALLS += target
