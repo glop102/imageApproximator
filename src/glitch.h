@@ -8,19 +8,18 @@
 #include <QWidget>
 #include <QHBoxLayout>
 #include <QVBoxLayout>
-#include <QGridLayout>
+#include <QFormLayout>
 #include <QLabel>
 #include <QPushButton>
 #include <QGroupBox>
-#include <QRadioButton>
 #include <QString>
-#include <QLineEdit>
-#include <QDoubleValidator>
 #include <QSpinBox>
+#include <QDoubleSpinBox>
+#include <QSlider>
 #include <QElapsedTimer>
+#include <tuple>
 #include "base.h"
 #include <math.h>
-#include <omp.h>
 
 namespace Glitch {
 class Settings;
@@ -39,22 +38,24 @@ class Settings : public BaseSettings{
 public:
 	explicit Settings();
 
+	bool getIsRotate();
+	QList<std::tuple<double,double,double>> getEffects();
+
 public slots:
+	void numberEffectsChange();
+	void shiftRotateToggled();
+	void addNewEffect();
+
 	virtual QString getApproximatorName();
 protected:
 	QHBoxLayout *globalLayout;
 
-	QGroupBox *quantitySelection;
-	QVBoxLayout *quantityLayout;
-	QSpinBox *numberPasses,*numberKernels;
+	QGroupBox *controlGroup;
+	QVBoxLayout *controlLayout;
+	QSpinBox *numberEffects;
+	QPushButton *shiftRotateToggle;
 
-	QGroupBox *toggleSelection;
-	QVBoxLayout *toggleLayout;
-	QPushButton *signedUnsignedToggle;
-
-	QList<QGroupBox*> kernelGroups;
-
-	QDoubleValidator doubleValidator;
+	QList<QGroupBox*> effectGroups;
 };
 
 }//namespace

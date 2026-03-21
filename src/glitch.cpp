@@ -1,86 +1,60 @@
 #include "glitch.h"
+#include <cstring>
 namespace Glitch{
 
-// MAKE FASTER WITH DIRECT BYTE ACCESS
-// orig.bits()
-// orig.bytesPerLine()
-/*
-QImage Approximator::applyKernel(QImage orig, const QList<double> &kernel, const bool &absolute){
-	QImage dest(orig.width(),orig.height(),orig.format());
-	dest.fill(Qt::black);
-	double divisor = calculateKernelDivisor(kernel);
-	int ks = sqrt(kernel.size()) / 2; // kernel size
-	uchar *pix = orig.bits();
+void Approximator::processImage(QImage orig){
+	Settings* sett = dynamic_cast<Settings*>(settingsObject);
+	bool isRotate = sett->getIsRotate();
+	auto effects = sett->getEffects();
 
-	//QElapsedTimer benchmark;
-	//benchmark.start();
-	#pragma omp parallel for schedule(static)
-	for(int y=ks; y<orig.height()-ks; y++){ // for each line
-		for(int x=ks; x<orig.width()-ks; x++){ // for each vertical
-			int r=0,g=0,b=0;
-			QColor temp;
-			int kernelIndex = 0;
-			for(int dy=-ks; dy<=ks; dy++){ // for each kernel row
-				for(int dx=-ks; dx<=ks; dx++){ //for each kernel vertical
-					unsigned long offset = (y+dy) * orig.bytesPerLine();
-					offset += ((x+dx)*4);
-					temp = orig.pixelColor(x+dx,y+dy);
-					r+=kernel[kernelIndex]*pix[offset+2];
-					g+=kernel[kernelIndex]*pix[offset+1];
-					b+=kernel[kernelIndex]*pix[offset+0];
-					kernelIndex++;
+	orig = orig.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+	keepGoing = true;
+
+	QImage current = orig;
+	int w = current.width();
+	int h = current.height();
+
+	for(int step = 0; step < effects.size(); step++){
+		auto [freq, phase, amp] = effects[step];
+
+		QImage next(w, h, current.format());
+		next.fill(Qt::black);
+
+		for(int y = 0; y < h; y++){
+			int offset = (int)round(amp * sin(freq * y + phase));
+			const uchar *src = current.scanLine(y);
+			uchar *dst = next.scanLine(y);
+
+			if(isRotate){
+				// normalize offset to [0, w)
+				offset = ((offset % w) + w) % w;
+				// dst[0..offset-1] <- src[w-offset..w-1]
+				memcpy(dst, src + (w - offset) * 4, offset * 4);
+				// dst[offset..w-1] <- src[0..w-1-offset]
+				memcpy(dst + offset * 4, src, (w - offset) * 4);
+			} else {
+				if(offset > 0){
+					int count = w - offset;
+					if(count > 0)
+						memcpy(dst + offset * 4, src, count * 4);
+				} else if(offset < 0){
+					int count = w + offset;
+					if(count > 0)
+						memcpy(dst, src + (-offset) * 4, count * 4);
+				} else {
+					memcpy(dst, src, w * 4);
 				}
 			}
-
-			if(absolute){
-				temp.setRed(abs(r)/divisor);
-				temp.setGreen(abs(g)/divisor);
-				temp.setBlue(abs(b)/divisor);
-			}else{
-				temp.setRed(r/divisor/2 + 128);
-				temp.setGreen(g/divisor/2 + 128);
-				temp.setBlue(b/divisor/2 + 128);
-			}
-			dest.setPixel(x,y,temp.rgb());
 		}
+
+		current = next;
+		emit progressMade(current, (step + 1) * 100.0 / effects.size());
+		QCoreApplication::processEvents();
+		if(!keepGoing)
+			return;
 	}
-	//long long time = benchmark.elapsed();
-	//printf("Image Kernal Apply Time : %lld\n",time);
-	return dest;
-}
-*/
 
-/* Idea for this aproximator:
- *
- * for a given input image, apply a glitchy filter over top of it
- * if the input image is a multi-frame image, apply it independantly to every frame
- *
- * 1) select random effect (random regions for each)
- *    1a) color shift rectangle
- *	  1b) drop a color channel in a rectangle
- *    1c) shift the rectangle a certain amount
- *    1d) random noise in a rectangle
- * 2) apply global effects - just the same effects as above but covers the whole image instead of just small rectangles
- *
- * should have flags in the settings to turn certain effects on/off
-*/
-//QImage Approximator::applySingleGlitchFrame(QImage orig){
-//}
-
-void Approximator::processImage(QImage orig){
-	printf("starting kernel approximator\n");
-	QElapsedTimer timer;
-	timer.start();
-
-	Settings* sett = dynamic_cast<Settings*>(settingsObject);
-	orig = orig.convertToFormat(QImage::Format_ARGB32_Premultiplied); // make sure we know the format
-	keepGoing = true; // flag to signal approximator should stop - the approximator runs in a seperate thread from the GUI
-
-	emit(progressMade(orig, 50.0 )); //some idiot decided to make it 0-100 for progress
-
-	printf("Done Approximating after %lld ms\n",timer.elapsed());
-	emit doneProcessing(orig);
-
+	emit doneProcessing(current);
 }
 
 Approximator::Approximator(BaseSettings *sett):BaseApproximator(sett){}
@@ -94,42 +68,136 @@ Approximator::Approximator(BaseSettings *sett):BaseApproximator(sett){}
 Settings::Settings(){
 	localApproximator = dynamic_cast<BaseApproximator*>(new Approximator(this));
 
-	// === Left Group - Various numerical options
-	quantitySelection = new QGroupBox;
-	quantityLayout = new QVBoxLayout;
-	numberPasses = new QSpinBox;
-	numberKernels = new QSpinBox;
-	quantitySelection->setLayout(quantityLayout);
-	quantityLayout->addWidget(new QLabel("Number Of Passes"));
-	quantityLayout->addWidget(numberPasses);
-	quantityLayout->addWidget(new QLabel("Number Of Kernels"));
-	quantityLayout->addWidget(numberKernels);
+	// === Left control group
+	controlGroup = new QGroupBox;
+	controlLayout = new QVBoxLayout;
+	numberEffects = new QSpinBox;
+	shiftRotateToggle = new QPushButton("Shift");
 
-	numberPasses->setMaximum(10);
-	numberPasses->setMinimum(1);
-	numberPasses->setValue(1);
-	numberKernels->setMaximum(10);
-	numberKernels->setMinimum(1);
-	numberKernels->setValue(4);
-	//connect( numberKernels,SIGNAL(valueChanged(int)),this,SLOT(numberKernelsChange()) );
+	controlGroup->setLayout(controlLayout);
+	controlLayout->addWidget(new QLabel("Number of Effects"));
+	controlLayout->addWidget(numberEffects);
+	controlLayout->addWidget(shiftRotateToggle);
+	controlLayout->addStretch(1);
 
-	// === Middle Group - Various binary options
-	toggleSelection = new QGroupBox;
-	toggleLayout = new QVBoxLayout;
-	signedUnsignedToggle = new QPushButton("Absolute");
-	toggleSelection->setLayout(toggleLayout);
-	toggleLayout->addWidget(signedUnsignedToggle);
+	numberEffects->setMinimum(1);
+	numberEffects->setMaximum(10);
+	numberEffects->setValue(1);
 
-	signedUnsignedToggle->setCheckable(true);
-	//connect( signedUnsignedToggle,SIGNAL(toggled(bool)),this,SLOT(signedUnsignedToggled()) );
+	shiftRotateToggle->setCheckable(true);
 
-	// == Finish out the layouts
+	connect(numberEffects, SIGNAL(valueChanged(int)), this, SLOT(numberEffectsChange()));
+	connect(shiftRotateToggle, SIGNAL(toggled(bool)), this, SLOT(shiftRotateToggled()));
+
+	// == Finish out the layout
 	globalLayout = new QHBoxLayout;
 	this->setLayout(globalLayout);
-	globalLayout->addWidget(quantitySelection);
-	globalLayout->addWidget(toggleSelection);
+	globalLayout->addWidget(controlGroup);
 	globalLayout->addStretch(1);
-	//kernels go after the stretch
+
+	// Add initial effect
+	addNewEffect();
+}
+
+void Settings::numberEffectsChange(){
+	int target = numberEffects->value();
+	while(effectGroups.length() > target){
+		auto temp = effectGroups.last();
+		globalLayout->removeWidget(temp);
+		delete temp;
+		effectGroups.pop_back();
+	}
+	while(effectGroups.length() < target){
+		addNewEffect();
+	}
+}
+
+void Settings::shiftRotateToggled(){
+	if(shiftRotateToggle->isChecked())
+		shiftRotateToggle->setText("Rotate");
+	else
+		shiftRotateToggle->setText("Shift");
+}
+
+void Settings::addNewEffect(){
+	int n = effectGroups.length() + 1;
+	QGroupBox *group = new QGroupBox(QString("Effect %1").arg(n));
+	QFormLayout *layout = new QFormLayout;
+	group->setLayout(layout);
+
+	// Frequency slider
+	QSlider *freqSlider = new QSlider(Qt::Horizontal);
+	freqSlider->setRange(0, 1000);
+	freqSlider->setValue(100);
+	QLabel *freqLabel = new QLabel("0.0500");
+	QHBoxLayout *freqRow = new QHBoxLayout;
+	freqRow->addWidget(freqSlider);
+	freqRow->addWidget(freqLabel);
+	QWidget *freqWidget = new QWidget;
+	freqWidget->setLayout(freqRow);
+	layout->addRow("Frequency", freqWidget);
+
+	connect(freqSlider, &QSlider::valueChanged, [freqLabel](int val){
+		double freq = val / 1000.0 * 0.5;
+		freqLabel->setText(QString::number(freq, 'f', 4));
+	});
+
+	// Phase slider
+	QSlider *phaseSlider = new QSlider(Qt::Horizontal);
+	phaseSlider->setRange(0, 1000);
+	phaseSlider->setValue(0);
+	QLabel *phaseLabel = new QLabel("0.0000");
+	QHBoxLayout *phaseRow = new QHBoxLayout;
+	phaseRow->addWidget(phaseSlider);
+	phaseRow->addWidget(phaseLabel);
+	QWidget *phaseWidget = new QWidget;
+	phaseWidget->setLayout(phaseRow);
+	layout->addRow("Phase", phaseWidget);
+
+	connect(phaseSlider, &QSlider::valueChanged, [phaseLabel](int val){
+		double phase = val / 1000.0 * 2.0 * M_PI;
+		phaseLabel->setText(QString::number(phase, 'f', 4));
+	});
+
+	// Amplitude spinbox
+	QDoubleSpinBox *ampSpin = new QDoubleSpinBox;
+	ampSpin->setRange(-2000.0, 2000.0);
+	ampSpin->setDecimals(1);
+	ampSpin->setSingleStep(1.0);
+	ampSpin->setValue(30.0);
+	layout->addRow("Amplitude", ampSpin);
+
+	effectGroups.append(group);
+	// Insert before the stretch (stretch is the last item)
+	globalLayout->insertWidget(globalLayout->count() - 1, group);
+}
+
+bool Settings::getIsRotate(){
+	return shiftRotateToggle->isChecked();
+}
+
+QList<std::tuple<double,double,double>> Settings::getEffects(){
+	QList<std::tuple<double,double,double>> result;
+	for(auto group : effectGroups){
+		QFormLayout *layout = (QFormLayout*)group->layout();
+
+		// Row 0: Frequency widget
+		QWidget *freqWidget = layout->itemAt(0, QFormLayout::FieldRole)->widget();
+		QSlider *freqSlider = freqWidget->findChild<QSlider*>();
+		double freq = freqSlider->value() / 1000.0 * 0.5;
+
+		// Row 1: Phase widget
+		QWidget *phaseWidget = layout->itemAt(1, QFormLayout::FieldRole)->widget();
+		QSlider *phaseSlider = phaseWidget->findChild<QSlider*>();
+		double phase = phaseSlider->value() / 1000.0 * 2.0 * M_PI;
+
+		// Row 2: Amplitude spinbox
+		QDoubleSpinBox *ampSpin = (QDoubleSpinBox*)layout->itemAt(2, QFormLayout::FieldRole)->widget();
+		double amp = ampSpin->value();
+
+		result.append(std::make_tuple(freq, phase, amp));
+	}
+	return result;
 }
 
 QString Settings::getApproximatorName(){
